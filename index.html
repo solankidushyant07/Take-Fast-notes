@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#F7F5F1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Jot — a fast, minimal, local-first note app.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Jot">
+  <title>Jot</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <!-- HOME: note browser, search, filters and folders -->
+    <section id="homeView" class="view">
+      <header id="homeTopbar" class="topbar">
+        <button id="sideBtn" class="icon-btn" type="button" aria-label="Open navigation" data-icon="panel"></button>
+        <h1 id="screenTitle" class="screen-title">All Notes</h1>
+        <button id="sortBtn" class="icon-btn" type="button" aria-label="Sort notes" data-icon="sort"></button>
+        <button id="viewBtn" class="icon-btn" type="button" aria-label="Switch view" data-icon="grid"></button>
+        <button id="appMenuBtn" class="icon-btn" type="button" aria-label="More options" data-icon="menu"></button>
+      </header>
+
+      <header id="selBar" class="topbar" hidden>
+        <button id="selClose" class="icon-btn" type="button" aria-label="Cancel selection" data-icon="x"></button>
+        <span id="selCount" class="screen-title">0 selected</span>
+        <button id="selAll" class="icon-btn" type="button" aria-label="Select all" data-icon="check"></button>
+        <button id="selPin" class="icon-btn" type="button" aria-label="Pin selected" data-icon="pin"></button>
+        <button id="selFav" class="icon-btn" type="button" aria-label="Favorite selected" data-icon="star"></button>
+        <button id="selTrash" class="icon-btn" type="button" aria-label="Move selected to trash" data-icon="trash"></button>
+      </header>
+
+      <div class="searchbar">
+        <span class="s-ic" data-icon="search"></span>
+        <input id="searchInput" type="search" inputmode="search" placeholder="Search notes" autocomplete="off" spellcheck="false" aria-label="Search notes">
+        <button id="searchClear" class="s-clear" type="button" aria-label="Clear search" data-icon="x" hidden></button>
+      </div>
+
+      <nav id="filterRow" class="filters" aria-label="Note filters">
+        <button class="chip on" type="button" data-chip="all">All</button>
+        <button class="chip" type="button" data-chip="recent">Recent</button>
+        <button class="chip" type="button" data-chip="favorites">Favorites</button>
+        <button class="chip" type="button" data-chip="notebooks">Folders</button>
+        <button class="chip" type="button" data-chip="tags">Tags</button>
+      </nav>
+
+      <section id="content" class="content" aria-live="polite"></section>
+      <!-- Primary creation action: plus icon only -->
+      <button id="fab" class="fab" type="button" aria-label="New note" data-icon="plus"></button>
+    </section>
+
+    <!-- EDITOR: title, writing area and fixed formatting toolbar -->
+    <section id="editView" class="view" hidden>
+      <header class="topbar">
+        <button id="backBtn" class="icon-btn" type="button" aria-label="Back to notes" data-icon="back"></button>
+        <div id="editTitleBar" class="topbar-title">Untitled</div>
+        <span id="saveState" class="save-state">Saved</span>
+        <button id="paperBtn" class="icon-btn" type="button" aria-label="Paper style" data-icon="doc"></button>
+        <button id="editMenuBtn" class="icon-btn" type="button" aria-label="Note options" data-icon="kebab"></button>
+      </header>
+
+      <div id="noteZone">
+        <div id="editorScroll" class="editor-scroll bg-white">
+          <input id="titleInput" type="text" placeholder="Title" autocomplete="off" spellcheck="true" aria-label="Note title">
+          <div id="bodyInput" contenteditable="true" data-placeholder="Start writing…" role="textbox" aria-multiline="true" spellcheck="true"></div>
+        </div>
+        <div id="fmtbar" class="fmtbar" aria-label="Formatting toolbar">
+          <button class="fmt-btn" type="button" data-cmd="bold" data-icon="bold" aria-label="Bold"></button>
+          <button class="fmt-btn" type="button" data-cmd="italic" data-icon="italic" aria-label="Italic"></button>
+          <button class="fmt-btn" type="button" data-cmd="underline" data-icon="underline" aria-label="Underline"></button>
+          <button class="fmt-btn" type="button" data-cmd="heading" data-icon="heading" aria-label="Heading"></button>
+          <button class="fmt-btn" type="button" data-cmd="ul" data-icon="ul" aria-label="Bullet list"></button>
+          <button class="fmt-btn" type="button" data-cmd="ol" data-icon="ol" aria-label="Numbered list"></button>
+          <button class="fmt-btn" type="button" data-cmd="check" data-icon="check" aria-label="Checklist"></button>
+          <button class="fmt-btn" type="button" data-cmd="link" data-icon="link" aria-label="Link"></button>
+          <button class="fmt-btn" type="button" data-cmd="more" data-icon="moreh" aria-label="More formatting"></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- OVERLAYS -->
+    <div id="scrim" class="scrim" aria-hidden="true"></div>
+    <aside id="drawer" class="drawer" aria-hidden="true" aria-label="Navigation">
+      <div class="drawer-head"><span class="drawer-brand">Jot</span></div>
+      <div id="drawerBody" class="drawer-scroll"></div>
+    </aside>
+    <div id="menu" class="menu" hidden role="menu"></div>
+    <div id="sheet" class="sheet" hidden>
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div id="sheetTitle" class="sheet-title"></div>
+      <div id="sheetContent" class="sheet-content"></div>
+    </div>
+    <input type="file" id="mdImport" accept=".md,.json,text/markdown,text/plain,application/json" multiple hidden>
+    <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="js/core.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+    }
+  </script>
+</body>
+</html>

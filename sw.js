@@ -2,17 +2,17 @@
  * Network-first with an offline cache fallback.
  */
 
-const CACHE = 'take-fast-notes-v7';
+const CACHE = 'take-fast-notes-v8';
 
 const APP_SHELL = [
   './',
   './index.html',
   './style.css',
   './manifest.webmanifest',
-  './icon.svg',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
+  './assets/icons/icon-192.png',
+  './assets/icons/icon-512.png',
   './js/core.js',
+  './js/ui.js',
   './js/app.js'
 ];
 

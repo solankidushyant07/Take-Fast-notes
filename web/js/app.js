@@ -1,5 +1,8 @@
 /* Take Fast Notes - app.js | Logic, Events, Gestures, and Editor */
 'use strict';
+if (NativeFS.available) {
+  NativeFS.ensureVault();
+}
 
 /* ---------- Selection Listeners ---------- */
 $('#selClose').addEventListener('click', exitSelection);
@@ -568,16 +571,20 @@ function createFolder(parent) {
 
   db.notebooks.push(nb);
 
-  if (parent) {
-    const p = byNb(parent);
+if (parent) {
+  const p = byNb(parent);
 
-    if (p) p.open = true;
-  }
-
-  save();
-  renderScreen();
-  toast('Folder created');
+  if (p) p.open = true;
 }
+
+save();
+
+if (NativeFS.available) {
+  NativeFS.createFolder(nb);
+}
+
+renderScreen();
+toast('Folder created');
 
 function openFolderActions(id, pos = null) {
   folderActionTarget = id;
@@ -1024,17 +1031,26 @@ function commit() {
     sanitize(bodyInput.innerHTML);
 
   if (
-    n.title !== title
-    || n.body !== body
-  ) {
-    n.title = title;
-    n.body = body;
-    n.updated = Date.now();
+  n.title !== title
+  || n.body !== body
+) {
+  const oldPath = n.filePath;
 
-    if (!save()) {
-      setSave('Storage full');
-      return;
-    }
+  n.title = title;
+  n.body = body;
+  n.updated = Date.now();
+
+  if (!save()) {
+    setSave('Storage full');
+    return;
+  }
+
+  if (NativeFS.available) {
+    NativeFS.renameNoteFile(
+      n,
+      oldPath
+    );
+  }
   }
 
   setSave('Saved');
@@ -1697,15 +1713,20 @@ function createNote() {
     zoom:100
   };
 
-  db.notes.push(note);
+db.notes.push(note);
 
-  save();
+save();
 
-  openEditor(
-    note.id,
-    true,
-    false
-  );
+if (NativeFS.available) {
+  NativeFS.writeNote(note);
+}
+
+openEditor(
+  note.id,
+  true,
+  false
+);
+  
 }
 
 fab.addEventListener(

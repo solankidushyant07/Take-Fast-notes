@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build Take Fast Notes
     runs-on: ubuntu-latest
 
     steps:
@@ -26,21 +26,27 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install npm dependencies
+      - name: Install dependencies
         run: npm install
 
-      - name: Add Android platform
+      - name: Create Android project
         run: npx cap add android
+
+      - name: Generate Android app icons
+        run: npx @capacitor/assets generate --android --iconBackgroundColor '#F7F5F1'
 
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Build debug APK
+      - name: Build APK
         working-directory: android
         run: ./gradlew assembleDebug
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ./Take-Fast-Notes.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: take-fast-notes-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Take-Fast-Notes
+          path: Take-Fast-Notes.apk

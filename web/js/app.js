@@ -1046,11 +1046,15 @@ function commit() {
   }
 
   if (NativeFS.available) {
-    NativeFS.renameNoteFile(
-      n,
-      oldPath
-    );
-  }
+  NativeFS.renameNoteFile(
+    n,
+    oldPath
+  ).then(success => {
+    if (!success) {
+      toast('Could not save Markdown file');
+    }
+  });
+}
   }
 
   setSave('Saved');
@@ -1717,15 +1721,49 @@ db.notes.push(note);
 
 save();
 
-if (NativeFS.available) {
-  NativeFS.writeNote(note);
-}
+async function createNote() {
+  const now = Date.now();
 
-openEditor(
-  note.id,
-  true,
-  false
-);
+  const note = {
+    id: uid(),
+    title: '',
+    body: '',
+    created: now,
+    updated: now,
+    viewed: now,
+    pinned: false,
+    fav: false,
+    nb:
+      screen.type === 'notebook'
+        ? screen.id
+        : null,
+    tags:
+      screen.type === 'tag'
+        ? [screen.tag]
+        : [],
+    color: 'white',
+    zoom: 100
+  };
+
+  db.notes.push(note);
+
+  save();
+
+  if (NativeFS.available) {
+    const created =
+      await NativeFS.writeNote(note);
+
+    if (!created) {
+      toast('Could not create Markdown file');
+    }
+  }
+
+  openEditor(
+    note.id,
+    true,
+    false
+  );
+}
   
 }
 

@@ -56,6 +56,10 @@ const I = {
     '<path d="M12 5v14"/>'
     + '<path d="M5 12h14"/>',
 
+    edit:
+    '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>'
+    + '<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+  
   back:
     '<path d="M19 12H5"/>'
     + '<path d="M12 19l-7-7 7-7"/>',
@@ -414,16 +418,13 @@ function applyMd(note, text) {
 
 /* ---------- Local Data ---------- */
 const KEY = 'fastnote.v2';
-const TRASH_DAYS = 30;
+const TRASH_DAYS = 30; // Items are permanently deleted after 30 days
 
+// Shell, this returns an empty array now. No more ghost folders!
 function seedNB() {
-  return [
-    { id: 'nb0', name: 'Apps', parent: null },
-    { id: 'nb1', name: 'Inbox', parent: null },
-    { id: 'nb2', name: 'Novel Ideas', parent: null },
-    { id: 'nb3', name: 'Personal', parent: null }
-  ].map(n => ({ ...n, open: false }));
+  return [];
 }
+
 
 let db = null;
 try {

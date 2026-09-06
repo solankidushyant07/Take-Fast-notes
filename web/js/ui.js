@@ -1,6 +1,10 @@
 /* Take Fast Notes - ui.js | DOM, State, Overlays, Cards & Xiaomi Style Rendering */
 'use strict';
 
+const folderView = $('#folderView');
+const settingsView = $('#settingsView');
+const folderList = $('#folderList');
+
 const homeView = $('#homeView');
 const homeTopbar = $('#homeTopbar');
 const selBar = $('#selBar');
@@ -86,42 +90,29 @@ function empty(icon, title, subtitle) {
   );
 }
 
-/* ---------- Note Card HTML (Matches Screenshot 2) ---------- */
+/* ---------- Note Card with Swipe Wrapper ---------- */
 function noteCard(n) {
-  const snip = plain(n.body)
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 140);
-
+  const snip = plain(n.body).replace(/\s+/g, ' ').trim().slice(0, 140);
   const metaText = [
     fmtDate(n.updated),
     n.nb ? nbName(n.nb) : '',
     (n.tags || []).slice(0, 2).map(t => '#' + t).join(' ')
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  ].filter(Boolean).join(' · ');
 
-  const inds =
-    (n.pinned ? ' ' + ic('pin', 'mini') : '')
-    + (n.fav ? ' ' + ic('star', 'mini fav') : '');
+  const inds = (n.pinned ? ' ' + ic('pin', 'mini') : '') + (n.fav ? ' ' + ic('star', 'mini fav') : '');
 
   return (
-    '<div class="card-wrap">'
-    + '<button class="note-card'
-    + (selMode && selSet.has(n.id) ? ' selected' : '')
-    + '" data-open="' + esc(n.id) + '">'
+    '<div class="swipe-wrap">'
+    + '<div class="swipe-action-bg">' + ic('trash') + '</div>'
+    + '<button class="note-card swipeable' + (selMode && selSet.has(n.id) ? ' selected' : '') + '" data-open="' + esc(n.id) + '">'
     + '<div class="card-title">' + esc(n.title || 'Untitled') + '</div>'
-    + '<div class="card-preview">'
-    + (esc(snip) || '<span style="opacity:0.4;">No additional text</span>')
-    + '</div>'
-    + '<div class="card-meta">'
-    + '<span>' + esc(metaText) + '</span>'
-    + inds
-    + '</div>'
+    + '<div class="card-preview">' + (esc(snip) || '<span style="opacity:0.4;">No additional text</span>') + '</div>'
+    + '<div class="card-meta"><span>' + esc(metaText) + '</span>' + inds + '</div>'
     + '</button>'
     + '</div>'
   );
 }
+
 
 /* ---------- Category Pills Row Rendering ---------- */
 function renderCategoryRow() {
@@ -169,8 +160,36 @@ function renderContent() {
     } else if (screen.filter === 'favorites') {
       notes = notes.filter(n => n.fav);
     }
-  } else if (screen.type === 'trash') {
-    notes = db.notes.filter(n => n.trashed && !n.trashedBy).sort((a, b) => b.trashed - a.trashed);
+
+      } else if (screen.type === 'trash') {
+    let tNotes = db.notes.filter(n => n.trashed && !n.trashedBy).sort((a, b) => b.trashed - a.trashed);
+    let tFolders = db.notebooks.filter(n => n.trashed && !n.trashedBy).sort((a, b) => b.trashed - a.trashed);
+    
+    if (q) {
+      tNotes = tNotes.filter(n => ((n.title || '') + ' ' + plain(n.body)).toLowerCase().includes(q));
+      tFolders = tFolders.filter(n => n.name.toLowerCase().includes(q));
+    }
+
+    if (tFolders.length) {
+      html += '<div class="sheet-section-title" style="padding-left:0;">Deleted Folders</div>';
+      tFolders.forEach(nb => {
+        html += `<button class="folder-list-item" data-tnb="${esc(nb.id)}">
+                   <span class="ric" data-icon="folder"></span>
+                   <span class="f-name">${esc(nb.name)}</span>
+                 </button>`;
+      });
+    }
+    
+    if (tNotes.length) {
+      if (tFolders.length) html += '<div class="sheet-divider"></div>';
+      html += '<div class="sheet-section-title" style="padding-left:0;">Deleted Notes</div>';
+      html += tNotes.map(noteCard).join('');
+    }
+    
+    if (!html) html = empty('trash', 'Trash is empty', 'Deleted items stay here for 30 days.');
+    
+    content.innerHTML = html;
+    return; // Exit early since Trash renders entirely differently
   }
 
   if (q) {
@@ -219,15 +238,82 @@ function countLabel(n, singular, plural = singular + 's') {
   return n + ' ' + (n === 1 ? singular : plural);
 }
 
-function nav(next) {
+/* ---------- Native History Router ---------- */
+function switchView(state) {
   closeAllOverlays();
-  currentTab = 'notes';
-  screen = next;
-  searchInput.value = '';
-  searchClear.hidden = true;
-  renderScreen();
-  content.scrollTop = 0;
+  homeView.hidden = true;
+  editView.hidden = true;
+  folderView.hidden = true;
+  settingsView.hidden = true;
+
+  const view = state.view || 'home';
+
+  if (view === 'home') {
+    screen = { type: 'notes', filter: 'all' }; 
+    homeView.hidden = false;
+    renderScreen();
+  } else if (view === 'folder') {
+    screen = { type: 'notebook', id: state.id };
+    homeView.hidden = false;
+    renderScreen();
+  } else if (view === 'folderBrowser') {
+    folderView.hidden = false;
+    renderFolderPage();
+  } else if (view === 'settings') {
+    settingsView.hidden = false;
+    // renderSettingsPage(); // We will build this in Phase 3
+  } else if (view === 'editor') {
+    homeView.hidden = true;
+    editView.hidden = false;
+  }
 }
+
+// Listen to the Android Hardware Back Button natively
+window.addEventListener('popstate', (e) => {
+  if (e.state) switchView(e.state);
+  else switchView({ view: 'home' });
+});
+
+// Navigate and push to history stack
+function nav(next) {
+  if (next.type === 'notebooks') {
+    history.pushState({ view: 'folderBrowser' }, '');
+    switchView({ view: 'folderBrowser' });
+  } else if (next.type === 'notebook') {
+    history.pushState({ view: 'folder', id: next.id }, '');
+    switchView({ view: 'folder', id: next.id });
+  } else {
+    history.pushState({ view: 'home', ...next }, '');
+    switchView({ view: 'home', ...next });
+  }
+}
+
+function renderFolderPage() {
+  const rootFolders = db.notebooks.filter(n => !n.parent && !n.trashed);
+  
+  let html = `<button class="folder-list-item" data-nb-nav="all">
+                <span class="ric" data-icon="doc"></span>
+                <span class="f-name">All Notes</span>
+              </button>`;
+  
+  rootFolders.forEach(nb => {
+    const count = notesIn(nb.id).length;
+    const isSel = selMode && selSet.has(nb.id);
+    html += `<button class="folder-list-item ${isSel ? 'selected' : ''}" data-nb-nav="${esc(nb.id)}">
+               <span class="ric" data-icon="folder"></span>
+               <span class="f-name">${esc(nb.name)}</span>
+               <span class="f-count">${count}</span>
+             </button>`;
+  });
+  
+  folderList.innerHTML = html;
+  
+  // Toggle selection UI for Folders
+  $('#folderSelBottom').hidden = !selMode;
+  $('#newFolderPageBtn').parentElement.hidden = selMode;
+}
+
+
 
 /* ---------- Selection Management ---------- */
 function enterSelection(id) {

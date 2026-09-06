@@ -16,7 +16,8 @@ navTabTasks.addEventListener('click', () => {
 });
 
 navTabSettings.addEventListener('click', () => {
-  openSettings();
+  history.pushState({ view: 'settings' }, '');
+  switchView({ view: 'settings' });
 });
 
 /* ---------- Selection Listeners ---------- */
@@ -53,6 +54,61 @@ $('#selTrash').addEventListener('click', () => {
   save();
   toast(countLabel(count, 'note') + ' moved to Trash');
   exitSelection();
+});
+
+/* ---------- Note Move Function ---------- */
+$('#selMove').addEventListener('click', () => {
+  const folders = db.notebooks.filter(n => !n.trashed && !n.parent);
+  let html = '<button class="sheet-item" data-move-to="root">'
+           + ic('doc') + '<span class="nt-name">Home (Root)</span></button>';
+           
+  folders.forEach(f => {
+    html += `<button class="sheet-item" data-move-to="${esc(f.id)}">
+               ${ic('folder')} <span class="nt-name">${esc(f.name)}</span>
+             </button>`;
+  });
+
+  openSheet('Move to Folder', html);
+});
+
+// Add this to your existing sheetContent.addEventListener('click') block:
+sheetContent.addEventListener('click', e => {
+  // ... existing sheet listeners ...
+  
+  const moveTo = e.target.closest('[data-move-to]');
+  if (moveTo) {
+    const targetFolder = moveTo.dataset.moveTo === 'root' ? null : moveTo.dataset.moveTo;
+    selSet.forEach(id => {
+      const n = byId(id);
+      if (n) n.nb = targetFolder;
+    });
+    save();
+    closeSheet();
+    exitSelection();
+    toast('Notes moved');
+    return;
+  }
+});
+
+
+/* ---------- Page Navigation Listeners ---------- */
+$('#folderBackBtn').addEventListener('click', () => history.back());
+$('#settingsBackBtn').addEventListener('click', () => history.back());
+$('#newFolderPageBtn').addEventListener('click', () => createFolder(null));
+
+// Clicking a folder inside the new Folder Page
+$('#folderList').addEventListener('click', e => {
+  const btn = e.target.closest('[data-nb-nav]');
+  if (!btn) return;
+  const target = btn.dataset.nbNav;
+  if (target === 'all') nav({ type: 'notes', filter: 'all' });
+  else nav({ type: 'notebook', id: target });
+});
+
+// Top right menu button now opens Settings
+appMenuBtn.addEventListener('click', () => {
+  history.pushState({ view: 'settings' }, '');
+  switchView({ view: 'settings' });
 });
 
 /* ---------- Category Row Interactions ---------- */
@@ -112,7 +168,8 @@ content.addEventListener('click', e => {
   openEditor(id, false, false);
 });
 
-let cardGesture = null;
+/* ---------- Complex Gestures: Swipe-to-Delete & Long Press ---------- */
+let gesture = null;
 
 content.addEventListener('touchstart', e => {
   if (selMode || e.touches.length !== 1) return;
@@ -122,41 +179,114 @@ content.addEventListener('touchstart', e => {
   const id = card.dataset.open;
   if (!id) return;
 
-  cardGesture = {
-    card,
-    id,
-    x: e.touches[0].clientX,
-    y: e.touches[0].clientY,
+  gesture = {
+    card, id,
+    startX: e.touches[0].clientX,
+    startY: e.touches[0].clientY,
+    mode: 'wait', // 'wait', 'swipe', or 'longpress'
     fired: false
   };
 
-  cardGesture.timer = setTimeout(() => {
-    if (!cardGesture) return;
-    cardGesture.fired = true;
+  // Long press timer
+  gesture.timer = setTimeout(() => {
+    if (!gesture || gesture.mode === 'swipe') return;
+    gesture.fired = true;
+    gesture.mode = 'longpress';
     if (navigator.vibrate) navigator.vibrate(25);
     enterSelection(id);
-  }, 480);
+  }, 400);
 }, { passive: true });
 
 content.addEventListener('touchmove', e => {
-  if (!cardGesture) return;
-  const dx = e.touches[0].clientX - cardGesture.x;
-  const dy = e.touches[0].clientY - cardGesture.y;
-  if (Math.abs(dy) > 12 || Math.abs(dx) > 12) {
-    clearTimeout(cardGesture.timer);
-    cardGesture = null;
+  if (!gesture) return;
+  
+  const dx = e.touches[0].clientX - gesture.startX;
+  const dy = e.touches[0].clientY - gesture.startY;
+  
+  if (gesture.mode === 'wait') {
+    // If moving vertically, cancel everything (it's a scroll)
+    if (Math.abs(dy) > 15) {
+      clearTimeout(gesture.timer);
+      gesture = null;
+      return;
+    }
+    // If moving horizontally, trigger swipe mode
+    if (dx < -15) {
+      clearTimeout(gesture.timer);
+      gesture.mode = 'swipe';
+      gesture.card.classList.add('dragging');
+    }
   }
-}, { passive: true });
 
-function finishCardGesture() {
-  if (!cardGesture) return;
-  clearTimeout(cardGesture.timer);
-  if (cardGesture.fired) suppressClickUntil = Date.now() + 350;
-  cardGesture = null;
+  if (gesture.mode === 'swipe') {
+    e.preventDefault(); // Stop screen from scrolling
+    const swipeDistance = Math.max(-80, Math.min(0, dx));
+    gesture.card.style.transform = `translateX(${swipeDistance}px)`;
+  }
+}, { passive: false });
+
+function finishGesture() {
+  if (!gesture) return;
+  clearTimeout(gesture.timer);
+  
+  if (gesture.mode === 'swipe') {
+    gesture.card.classList.remove('dragging');
+    
+    // Read the final transform
+    const transformMatch = gesture.card.style.transform.match(/translateX\(([-\d.]+)px\)/);
+    const finalX = transformMatch ? parseFloat(transformMatch[1]) : 0;
+    
+    gesture.card.style.transform = ''; // reset inline style
+    
+    if (finalX < -45) {
+      // Trigger Delete
+      if (navigator.vibrate) navigator.vibrate(15);
+      moveNoteToTrash(gesture.id, true);
+    }
+  }
+  
+  if (gesture.fired) suppressClickUntil = Date.now() + 350;
+  gesture = null;
 }
 
-content.addEventListener('touchend', finishCardGesture, { passive: true });
-content.addEventListener('touchcancel', finishCardGesture, { passive: true });
+content.addEventListener('touchend', finishGesture, { passive: true });
+content.addEventListener('touchcancel', finishGesture, { passive: true });
+
+/* ---------- Folder Page Long Press ---------- */
+let folderGesture = null;
+
+folderList.addEventListener('touchstart', e => {
+  if (e.touches.length !== 1) return;
+  const item = e.target.closest('[data-nb-nav]');
+  if (!item || item.dataset.nbNav === 'all') return;
+
+  folderGesture = {
+    id: item.dataset.nbNav,
+    fired: false,
+    timer: setTimeout(() => {
+      folderGesture.fired = true;
+      if (navigator.vibrate) navigator.vibrate(25);
+      selMode = true;
+      selSet = new Set([folderGesture.id]);
+      
+      // Update topbar for folder selection mode
+      $('#selCount').textContent = countLabel(selSet.size, 'folder');
+      homeTopbar.hidden = true;
+      selBar.hidden = false;
+      $('#selMove').hidden = true; // Hide note-specific buttons
+      $('#selFav').hidden = true;
+      
+      renderFolderPage();
+    }, 400)
+  };
+}, { passive: true });
+
+folderList.addEventListener('touchmove', () => {
+  if (folderGesture) { clearTimeout(folderGesture.timer); folderGesture = null; }
+}, { passive: true });
+folderList.addEventListener('touchend', () => {
+  if (folderGesture) { clearTimeout(folderGesture.timer); folderGesture = null; }
+}, { passive: true });
 
 /* ---------- Overlays & Menu Handlers ---------- */
 scrim.addEventListener('click', closeAllOverlays);
@@ -355,14 +485,17 @@ function openEditor(id, focusTitle = false, readonly = false) {
   fmtbar.hidden = editingReadonly;
   editMenuBtn.hidden = editingReadonly;
   editTitleBar.textContent = titleInput.value.trim() || 'Untitled';
-  setSave(editingReadonly ? 'In Trash' : 'Saved');
 
+  setSave(editingReadonly ? 'In Trash' : 'Saved');
   applyNoteTheme(n);
   document.documentElement.style.setProperty('--editor-zoom', (n.zoom || 100) / 100);
 
-  homeView.hidden = true;
-  editView.hidden = false;
+  // Push to history stack instead of just hiding views
+  history.pushState({ view: 'editor', id }, '');
+  switchView({ view: 'editor', id });
+
   closeAllOverlays();
+  checkFormatStates();
 
   if (!editingReadonly) {
     const target = focusTitle ? titleInput : bodyInput;
@@ -373,13 +506,14 @@ function openEditor(id, focusTitle = false, readonly = false) {
 function closeEditor() {
   clearTimeout(saveTimer);
   commit();
-  editView.hidden = true;
-  homeView.hidden = false;
   editing = null;
   editingReadonly = false;
   document.documentElement.style.setProperty('--editor-zoom', '1');
-  renderScreen();
+  
+  // This automatically pops back to Home or Folder
+  history.back(); 
 }
+
 
 function setSave(text) {
   saveState.textContent = text;
@@ -504,7 +638,7 @@ editMenuBtn.addEventListener('click', () => {
   ]);
 });
 
-/* ---------- Note Creation ---------- */
+/* ---------- Note Creation (Smart Defaults) ---------- */
 async function createNote() {
   if (NativeFS.available && !vaultReady) {
     const ready = await ensureVault();
@@ -512,6 +646,14 @@ async function createNote() {
       toast('Choose a notes folder first');
       return;
     }
+  }
+
+  // Determine where to create the note
+  let targetNb = null;
+  if (screen.type === 'notebook') {
+    targetNb = screen.id; // Create in current folder if we are inside one
+  } else if (db.prefs.defFolder) {
+    targetNb = db.prefs.defFolder; // Otherwise use default folder setting
   }
 
   const now = Date.now();
@@ -524,7 +666,7 @@ async function createNote() {
     viewed: now,
     pinned: false,
     fav: false,
-    nb: screen.type === 'notebook' ? screen.id : null,
+    nb: targetNb,
     tags: screen.type === 'tag' ? [screen.tag] : [],
     color: 'white',
     zoom: 100
@@ -539,7 +681,55 @@ async function createNote() {
   openEditor(note.id, true, false);
 }
 
-fab.addEventListener('click', createNote);
+/* ---------- Export Functionality ---------- */
+function downloadFile(filename, content, type = 'text/plain') {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Export multiple selected notes
+$('#selExport').addEventListener('click', () => {
+  openSheet('Export Selected Notes',
+    '<button class="sheet-item" data-export-type="md">' + ic('doc') + '<span class="nt-name">Export as Markdown (.md)</span></button>' +
+    '<button class="sheet-item" data-export-type="txt">' + ic('doc') + '<span class="nt-name">Export as Text (.txt)</span></button>'
+  );
+});
+
+// Handle the sheet clicks for exporting
+sheetContent.addEventListener('click', e => {
+  const exportTypeTarget = e.target.closest('[data-export-type]');
+  if (exportTypeTarget) {
+    const format = exportTypeTarget.dataset.exportType;
+    let exportedCount = 0;
+
+    selSet.forEach(id => {
+      const n = byId(id);
+      if (n) {
+        const content = format === 'md' ? markdownForNote(n) : plain(n.body);
+        const filename = (n.title || 'Untitled').trim().replace(/[\/\\:*?"<>|]/g, '-') + `.${format}`;
+        downloadFile(filename, content);
+        exportedCount++;
+      }
+    });
+
+    closeSheet();
+    exitSelection();
+    toast(`${exportedCount} notes exported`);
+    return;
+  }
+});
+
+// Wire up the main Settings Export button for a full backup
+$('#setExportBtn').addEventListener('click', () => {
+  exportAllNotes(); // Uses the JSON backup function already in your code
+});
 
 /* ---------- Settings Sheet ---------- */
 function openSettings() {
@@ -593,15 +783,139 @@ async function ensureVault() {
   }
 }
 
-/* ---------- Initialization ---------- */
-applyTheme();
-renderScreen();
+/* ---------- Folder Selection Actions ---------- */
+$('#fSelEdit').addEventListener('click', () => {
+  if (selSet.size !== 1) return toast('Select one folder to rename');
+  const id = Array.from(selSet)[0];
+  const nb = byNb(id);
+  const name = prompt('Rename folder', nb.name);
+  
+  if (name && name.trim()) {
+    nb.name = name.trim();
+    save();
+    renderFolderPage();
+    toast('Folder renamed');
+  }
+  exitSelection();
+});
 
+$('#fSelTrash').addEventListener('click', () => {
+  const stamp = Date.now();
+  selSet.forEach(id => {
+    const ids = descSet(id);
+    db.notebooks.forEach(nb => { if (ids.has(nb.id) && !nb.trashed) { nb.trashed = stamp; nb.trashedBy = id; } });
+    db.notes.forEach(n => { if (ids.has(n.nb) && !n.trashed) { n.trashed = stamp; n.trashedBy = id; } });
+  });
+  save();
+  renderFolderPage();
+  exitSelection();
+  toast('Moved to Trash');
+});
+
+/* ---------- Native Android APK Export ---------- */
+async function nativeExportFiles(notesArray, format) {
+  if (!NativeFS.available || !vaultReady) {
+    toast('Vault access required for native export.');
+    return;
+  }
+  
+  toast('Exporting...');
+  let count = 0;
+  const exportDir = 'TakeFastNotes_Export_' + Date.now();
+  await NativeFS.createFolder(exportDir);
+
+  for (const n of notesArray) {
+    const content = format === 'md' ? markdownForNote(n) : plain(n.body);
+    const filename = (n.title || 'Untitled').trim().replace(/[\/\\:*?"<>|]/g, '-') + `.${format}`;
+    const path = `${exportDir}/${filename}`;
+    
+    const success = await NativeFS.writeFile(path, content);
+    if (success) count++;
+  }
+  toast(`Exported ${count} notes to device folder.`);
+}
+
+function exportAllNotes() {
+  const validNotes = db.notes.filter(n => !n.trashed);
+  nativeExportFiles(validNotes, 'md');
+}
+
+// Override the Multi-select Export sheet handler
+sheetContent.addEventListener('click', e => {
+  const exportTypeTarget = e.target.closest('[data-export-type]');
+  if (exportTypeTarget) {
+    const format = exportTypeTarget.dataset.exportType;
+    const notesToExport = [];
+    selSet.forEach(id => {
+      const n = byId(id);
+      if (n) notesToExport.push(n);
+    });
+    
+    closeSheet();
+    exitSelection();
+    nativeExportFiles(notesToExport, format);
+    return;
+  }
+  // ... rest of sheet handlers remain intact
+});
+
+/* ---------- Settings Page Logic ---------- */
+function updateSettingsLabels() {
+  $('#startPlaceLabel').textContent = db.prefs.startPlace === 'newNote' ? 'New Note' : 'Home';
+  const defFolder = byNb(db.prefs.defFolder);
+  $('#defFolderLabel').textContent = defFolder ? defFolder.name : 'Home (Root)';
+}
+
+$('#setStartBtn').addEventListener('click', () => {
+  db.prefs.startPlace = db.prefs.startPlace === 'home' ? 'newNote' : 'home';
+  save();
+  updateSettingsLabels();
+  toast('Default launch screen updated');
+});
+
+$('#setDefFolderBtn').addEventListener('click', () => {
+  const folders = db.notebooks.filter(n => !n.trashed && !n.parent);
+  let html = '<button class="sheet-item" data-def-folder="root">'
+           + ic('doc') + '<span class="nt-name">Home (Root)</span></button>';
+           
+  folders.forEach(f => {
+    html += `<button class="sheet-item" data-def-folder="${esc(f.id)}">
+               ${ic('folder')} <span class="nt-name">${esc(f.name)}</span>
+             </button>`;
+  });
+
+  openSheet('Set Default New-Note Folder', html);
+});
+
+// Update sheetContent listener to handle setting the default folder
+sheetContent.addEventListener('click', e => {
+  const defFolderTarget = e.target.closest('[data-def-folder]');
+  if (defFolderTarget) {
+    db.prefs.defFolder = defFolderTarget.dataset.defFolder === 'root' ? null : defFolderTarget.dataset.defFolder;
+    save();
+    updateSettingsLabels();
+    closeSheet();
+    toast('Default folder updated');
+    return;
+  }
+});
+
+/* ---------- Initialization & Launch ---------- */
 async function startApp() {
   if (NativeFS.available) {
     await ensureVault();
   }
-  renderScreen();
+  
+  applyTheme();
+  updateSettingsLabels();
+
+  // Route to the correct starting place
+  if (db.prefs.startPlace === 'newNote') {
+    createNote();
+  } else {
+    // History API will handle routing to 'home' automatically
+    nav({ type: 'notes', filter: 'all' });
+  }
 }
 
 startApp();

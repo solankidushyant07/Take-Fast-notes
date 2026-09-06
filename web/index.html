@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-  <meta name="theme-color" content="#F7F5F1">
-  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#121212">
+  <meta name="color-scheme" content="dark">
   <meta name="description" content="Take Fast Notes — a fast, minimal, local-first note app.">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -17,73 +17,74 @@
 <body>
   <main class="app">
 
-    <!-- HOME: note browser, search, filters and folders -->
+    <!-- HOME: Note browser, search, folders and cards -->
     <section id="homeView" class="view">
-      <header id="homeTopbar" class="topbar">
-        <button id="sideBtn" class="icon-btn" type="button" aria-label="Open navigation" data-icon="panel"></button>
-
-        <h1 id="screenTitle" class="screen-title">All Notes</h1>
-
-        <button id="sortBtn" class="icon-btn" type="button" aria-label="Sort notes" data-icon="sort"></button>
-        <button id="viewBtn" class="icon-btn" type="button" aria-label="Switch view" data-icon="grid"></button>
-        <button id="appMenuBtn" class="icon-btn" type="button" aria-label="More options" data-icon="menu"></button>
+      
+      <!-- Top Navigation: 3 Xiaomi-style Icons -->
+      <header id="homeTopbar" class="topbar-nav">
+        <button id="navTabNotes" class="nav-tab active" type="button" aria-label="Notes" data-nav="notes">
+          <span class="nav-icon" data-icon="notesTab"></span>
+        </button>
+        <button id="navTabTasks" class="nav-tab" type="button" aria-label="Tasks" data-nav="tasks">
+          <span class="nav-icon" data-icon="tasksTab"></span>
+        </button>
+        <button id="navTabSettings" class="nav-tab" type="button" aria-label="Settings" data-nav="settings">
+          <span class="nav-icon" data-icon="settingsTab"></span>
+        </button>
       </header>
 
-      <header id="selBar" class="topbar" hidden>
+      <!-- Selection Mode Header -->
+      <header id="selBar" class="topbar sel-topbar" hidden>
         <button id="selClose" class="icon-btn" type="button" aria-label="Cancel selection" data-icon="x"></button>
-        <span id="selCount" class="screen-title">0 selected</span>
-        <button id="selAll" class="icon-btn" type="button" aria-label="Select all" data-icon="check"></button>
-        <button id="selPin" class="icon-btn" type="button" aria-label="Pin selected" data-icon="pin"></button>
-        <button id="selFav" class="icon-btn" type="button" aria-label="Favorite selected" data-icon="star"></button>
-        <button id="selTrash" class="icon-btn" type="button" aria-label="Move selected to trash" data-icon="trash"></button>
+        <span id="selCount" class="sel-count-label">0 selected</span>
+        <div class="sel-actions">
+          <button id="selAll" class="icon-btn" type="button" aria-label="Select all" data-icon="check"></button>
+          <button id="selPin" class="icon-btn" type="button" aria-label="Pin selected" data-icon="pin"></button>
+          <button id="selFav" class="icon-btn" type="button" aria-label="Favorite selected" data-icon="star"></button>
+          <button id="selTrash" class="icon-btn" type="button" aria-label="Move selected to trash" data-icon="trash"></button>
+        </div>
       </header>
 
-      <div class="searchbar">
-        <span class="s-ic" data-icon="search"></span>
-
-        <input
-          id="searchInput"
-          type="search"
-          inputmode="search"
-          placeholder="Search notes"
-          autocomplete="off"
-          spellcheck="false"
-          aria-label="Search notes"
-        >
-
-        <button
-          id="searchClear"
-          class="s-clear"
-          type="button"
-          aria-label="Clear search"
-          data-icon="x"
-          hidden
-        ></button>
+      <!-- Search Capsule Bar -->
+      <div class="search-container">
+        <div class="searchbar">
+          <span class="s-ic" data-icon="search"></span>
+          <input
+            id="searchInput"
+            type="search"
+            inputmode="search"
+            placeholder="Search notes"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Search notes"
+          >
+          <button
+            id="searchClear"
+            class="s-clear"
+            type="button"
+            aria-label="Clear search"
+            data-icon="x"
+            hidden
+          ></button>
+        </div>
       </div>
 
-      <nav id="filterRow" class="filters" aria-label="Note filters">
-        <button class="chip on" type="button" data-chip="all">All</button>
-        <button class="chip" type="button" data-chip="recent">Recent</button>
-        <button class="chip" type="button" data-chip="favorites">Favorites</button>
-        <button class="chip" type="button" data-chip="notebooks">Folders</button>
-        <button class="chip" type="button" data-chip="tags">Tags</button>
-      </nav>
+      <!-- Categories & Folder Navigation Row -->
+      <nav id="filterRow" class="category-row" aria-label="Note categories"></nav>
 
-      <section id="content" class="content" aria-live="polite"></section>
+      <!-- Note Cards Content Area -->
+      <section id="content" class="content-cards" aria-live="polite"></section>
 
-      <!-- Primary creation action -->
+      <!-- Primary Creation Action: Floating + button -->
       <button id="fab" class="fab" type="button" aria-label="New note" data-icon="plus"></button>
     </section>
 
-    <!-- EDITOR: title, writing area and fixed formatting toolbar -->
+    <!-- EDITOR: Title, writing area and toolbar -->
     <section id="editView" class="view" hidden>
-      <header class="topbar">
+      <header class="topbar edit-topbar">
         <button id="backBtn" class="icon-btn" type="button" aria-label="Back to notes" data-icon="back"></button>
-
         <div id="editTitleBar" class="topbar-title">Untitled</div>
-
         <span id="saveState" class="save-state">Saved</span>
-
         <button id="editMenuBtn" class="icon-btn" type="button" aria-label="Note options" data-icon="kebab"></button>
       </header>
 
@@ -97,7 +98,6 @@
             spellcheck="true"
             aria-label="Note title"
           >
-
           <div
             id="bodyInput"
             contenteditable="true"
@@ -122,16 +122,8 @@
       </div>
     </section>
 
-    <!-- OVERLAYS -->
+    <!-- OVERLAYS & SHEETS -->
     <div id="scrim" class="scrim" aria-hidden="true"></div>
-
-    <aside id="drawer" class="drawer" aria-hidden="true" aria-label="Navigation">
-      <div class="drawer-head">
-        <span class="drawer-brand">Take Fast Notes</span>
-      </div>
-
-      <div id="drawerBody" class="drawer-scroll"></div>
-    </aside>
 
     <div id="menu" class="menu" hidden role="menu"></div>
 
@@ -153,9 +145,9 @@
   </main>
 
   <script src="js/core.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/native-fs.js"></script>
-<script src="js/app.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/native-fs.js"></script>
+  <script src="js/app.js"></script>
 
   <script>
     if ('serviceWorker' in navigator) {

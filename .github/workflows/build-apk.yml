@@ -35,6 +35,1262 @@ jobs:
       - name: Generate Android app icons
         run: npx @capacitor/assets generate --android --iconBackgroundColor '#F7F5F1'
 
+      - name: Add Take Fast Notes native vault plugin
+        shell: bash
+        run: |
+          set -e
+
+          PACKAGE_DIR="android/app/src/main/java/com/coconutshell/takefastnotes"
+
+          mkdir -p "$PACKAGE_DIR"
+
+          cat > "$PACKAGE_DIR/VaultPlugin.java" <<'JAVA'
+          package com.coconutshell.takefastnotes;
+
+          import android.app.Activity;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.database.Cursor;
+          import android.net.Uri;
+          import android.provider.DocumentsContract;
+
+          import com.getcapacitor.JSArray;
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+
+          import java.io.ByteArrayOutputStream;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.nio.charset.StandardCharsets;
+          import java.util.ArrayList;
+          import java.util.HashMap;
+          import java.util.HashSet;
+          import java.util.List;
+          import java.util.Map;
+          import java.util.Set;
+
+          @CapacitorPlugin(name = "TakeFastNotesVault")
+          public class VaultPlugin extends Plugin {
+
+              private static final int PICK_FOLDER = 41001;
+
+              private static final String PREFS = "take_fast_notes_vault";
+              private static final String VAULT_URI = "vault_uri";
+              private static final String VAULT_NAME = "vault_name";
+
+              private PluginCall pendingPickerCall;
+
+              private android.content.SharedPreferences prefs() {
+                  return getContext().getSharedPreferences(
+                      PREFS,
+                      android.content.Context.MODE_PRIVATE
+                  );
+              }
+
+              private Uri getVaultUri() {
+                  String value = prefs().getString(VAULT_URI, null);
+
+                  if (value == null || value.isEmpty()) {
+                      return null;
+                  }
+
+                  return Uri.parse(value);
+              }
+
+              private void saveVault(Uri uri) {
+                  prefs()
+                      .edit()
+                      .putString(VAULT_URI, uri.toString())
+                      .putString(VAULT_NAME, "Take Fast Notes")
+                      .apply();
+              }
+
+              private void clearVault() {
+                  prefs()
+                      .edit()
+                      .remove(VAULT_URI)
+                      .remove(VAULT_NAME)
+                      .apply();
+              }
+
+              @com.getcapacitor.PluginMethod
+              public void chooseFolder(PluginCall call) {
+                  Activity activity = getActivity();
+
+                  if (activity == null) {
+                      call.reject("Activity is not available");
+                      return;
+                  }
+
+                  pendingPickerCall = call;
+
+                  Intent intent = new Intent(
+                      Intent.ACTION_OPEN_DOCUMENT_TREE
+                  );
+
+                  intent.addFlags(
+                      Intent.FLAG_GRANT_READ_URI_PERMISSION
+                      | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                      | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                      | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+                  );
+
+                  activity.startActivityForResult(
+                      intent,
+                      PICK_FOLDER
+                  );
+              }
+
+              @Override
+              protected void handleOnActivityResult(
+                  int requestCode,
+                  int resultCode,
+                  Intent data
+              ) {
+                  super.handleOnActivityResult(
+                      requestCode,
+                      resultCode,
+                      data
+                  );
+
+                  if (requestCode != PICK_FOLDER) {
+                      return;
+                  }
+
+                  PluginCall call = pendingPickerCall;
+                  pendingPickerCall = null;
+
+                  if (call == null) {
+                      return;
+                  }
+
+                  if (
+                      resultCode != Activity.RESULT_OK
+                      || data == null
+                      || data.getData() == null
+                  ) {
+                      call.reject("Folder selection cancelled");
+                      return;
+                  }
+
+                  Uri parentUri = data.getData();
+
+                  try {
+                      int flags =
+                          data.getFlags()
+                          & (
+                              Intent.FLAG_GRANT_READ_URI_PERMISSION
+                              | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                          );
+
+                      getContext()
+                          .getContentResolver()
+                          .takePersistableUriPermission(
+                              parentUri,
+                              flags
+                          );
+
+                      Uri vaultUri =
+                          findChildDirectory(
+                              parentUri,
+                              "Take Fast Notes"
+                          );
+
+                      if (vaultUri == null) {
+                          vaultUri =
+                              createDirectory(
+                                  parentUri,
+                                  "Take Fast Notes"
+                              );
+                      }
+
+                      if (vaultUri == null) {
+                          call.reject(
+                              "Could not create Take Fast Notes folder"
+                          );
+                          return;
+                      }
+
+                      saveVault(vaultUri);
+
+                      JSObject result = new JSObject();
+                      result.put(
+                          "success",
+                          true
+                      );
+                      result.put(
+                          "name",
+                          "Take Fast Notes"
+                      );
+                      result.put(
+                          "uri",
+                          vaultUri.toString()
+                      );
+
+                      call.resolve(result);
+
+                  } catch (Exception e) {
+                      call.reject(
+                          "Could not access selected folder",
+                          e
+                      );
+                  }
+              }
+
+              @com.getcapacitor.PluginMethod
+              public void hasPermission(PluginCall call) {
+                  Uri uri = getVaultUri();
+
+                  if (uri == null) {
+                      JSObject result = new JSObject();
+                      result.put("valid", false);
+                      call.resolve(result);
+                      return;
+                  }
+
+                  boolean valid = canAccess(uri);
+
+                  if (!valid) {
+                      clearVault();
+                  }
+
+                  JSObject result = new JSObject();
+                  result.put("valid", valid);
+
+                  call.resolve(result);
+              }
+
+              @com.getcapacitor.PluginMethod
+              public void getVault(PluginCall call) {
+                  Uri uri = getVaultUri();
+
+                  JSObject result = new JSObject();
+
+                  if (uri == null) {
+                      result.put("valid", false);
+                      call.resolve(result);
+                      return;
+                  }
+
+                  if (!canAccess(uri)) {
+                      clearVault();
+                      result.put("valid", false);
+                      call.resolve(result);
+                      return;
+                  }
+
+                  result.put("valid", true);
+                  result.put(
+                      "name",
+                      "Take Fast Notes"
+                  );
+                  result.put(
+                      "uri",
+                      uri.toString()
+                  );
+
+                  call.resolve(result);
+              }
+
+              @com.getcapacitor.PluginMethod
+              public void list(PluginCall call) {
+                  Uri vault = getVaultUri();
+
+                  if (
+                      vault == null
+                      || !canAccess(vault)
+                  ) {
+                      call.reject(
+                          "Notes folder permission is not available"
+                      );
+                      return;
+                  }
+
+                  String path =
+                      call.getString("path", "");
+
+                  try {
+                      Uri directory =
+                          resolveDirectory(
+                              vault,
+                              path
+                          );
+
+                      if (directory == null) {
+                          call.reject("Folder not found");
+                          return;
+                      }
+
+                      JSArray items =
+                          new JSArray();
+
+                      Cursor cursor =
+                          getContext()
+                              .getContentResolver()
+                              .query(
+                                  DocumentsContract
+                                      .buildChildDocumentsUriUsingTree(
+                                          directory,
+                                          DocumentsContract
+                                              .getTreeDocumentId(directory)
+                                      ),
+                                  new String[] {
+                                      DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                                      DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                                      DocumentsContract.Document.COLUMN_MIME_TYPE,
+                                      DocumentsContract.Document.COLUMN_SIZE,
+                                      DocumentsContract.Document.COLUMN_LAST_MODIFIED
+                                  },
+                                  null,
+                                  null,
+                                  DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                              );
+
+                      if (cursor != null) {
+                          try {
+                              while (cursor.moveToNext()) {
+                                  String documentId =
+                                      cursor.getString(0);
+
+                                  String name =
+                                      cursor.getString(1);
+
+                                  String mime =
+                                      cursor.getString(2);
+
+                                  long size =
+                                      cursor.isNull(3)
+                                          ? 0
+                                          : cursor.getLong(3);
+
+                                  long modified =
+                                      cursor.isNull(4)
+                                          ? 0
+                                          : cursor.getLong(4);
+
+                                  boolean directoryItem =
+                                      DocumentsContract.Document.MIME_TYPE_DIR
+                                          .equals(mime);
+
+                                  if (
+                                      !directoryItem
+                                      && !name
+                                          .toLowerCase()
+                                          .endsWith(".md")
+                                  ) {
+                                      continue;
+                                  }
+
+                                  JSObject item =
+                                      new JSObject();
+
+                                  item.put(
+                                      "name",
+                                      name
+                                  );
+
+                                  item.put(
+                                      "path",
+                                      path.isEmpty()
+                                          ? name
+                                          : path + "/" + name
+                                  );
+
+                                  item.put(
+                                      "directory",
+                                      directoryItem
+                                  );
+
+                                  item.put(
+                                      "size",
+                                      size
+                                  );
+
+                                  item.put(
+                                      "modified",
+                                      modified
+                                  );
+
+                                  items.put(item);
+                              }
+                          } finally {
+                              cursor.close();
+                          }
+                      }
+
+                      JSObject result =
+                          new JSObject();
+
+                      result.put(
+                          "items",
+                          items
+                      );
+
+                      call.resolve(result);
+
+                  } catch (Exception e) {
+                      call.reject(
+                          "Could not list folder",
+                          e
+                      );
+                  }
+              }
+
+              @com.getcapacitor.PluginMethod
+              public void readFile(PluginCall call) {
+                  Uri vault = getVaultUri();
+
+                  if (
+                      vault == null
+                      || !canAccess(vault)
+                  ) {
+                      call.reject(
+                          "Notes folder permission is not available"
+                      );
+                      return;
+                  }
+
+                  String path =
+                      call.getString("path", "");
+
+                  try {
+                      Uri file =
+                          resolveFile(
+                              vault,
+                              path
+                          );
+
+                      if (file == null) {
+                          call.reject("File not found");
+                          return;
+                      }
+
+                      InputStream input =
+                          getContext()
+                              .getContentResolver()
+                              .openInputStream(file);
+
+                      if (input == null) {
+                          call.reject("Could not open file");
+                          return;
+                      }
+
+                      try {
+                          ByteArrayOutputStream output =
+                              new ByteArrayOutputStream();
+
+                          byte[] buffer =
+                              new byte[8192];
+
+                          int count;
+
+                          while (
+                              (count = input.read(buffer))
+                                  != -1
+                          ) {
+                              output.write(
+                                  buffer,
+                                  0,
+                                  count
+                              );
+                          }
+
+                          JSObject result =
+                              new JSObject();
+
+                          result.put(
+                              "path",
+                              path
+                          );
+
+                          result.put(
+                              "data",
+                              output.toString(
+                                  StandardCharsets.UTF_8.name()
+                              )
+                          );
+
+                          call.resolve(result);
+
+                      } finally {
+                          input.close();
+                      }
+
+                  } catch (Exception e) {
+                      call.reject(
+                          "Could not read Markdown file",
+                          e
+                      );
+                  }
+              }
+
+              @com.getcapacitor.PluginMethod
+              public void writeFile(PluginCall call) {
+                  Uri vault = getVaultUri();
+
+                  if (
+                      vault == null
+                      || !canAccess(vault)
+                  ) {
+                      call.reject(
+                          "Notes folder permission is not available"
+                      );
+                      return;
+                  }
+
+                  String path =
+                      call.getString("path", "");
+
+                  String data =
+                      call.getString("data", "");
+
+                  try {
+                      Uri file =
+                          resolveFile(
+                              vault,
+                              path
+                          );
+
+                      if (file == null) {
+                          String name =
+                              fileName(path);
+
+                          String parentPath =
+                              parentPath(path);
+
+                          Uri parent =
+                              resolveDirectory(
+                                  vault,
+                                  parentPath
+                              );
+
+                          if (parent == null) {
+                              call.reject(
+                                  "Parent folder not found"
+                              );
+                              return;
+                          }
+
+                          file =
+                              createFile(
+                                  parent,
+                                  name
+                              );
+                      }
+
+                      OutputStream output =
+                          getContext()
+                              .getContentResolver()
+                              .openOutputStream(
+                                  file,
+                                  "wt"
+                              );
+
+                      if (output == null) {
+                          call.reject(
+                              "Could not open file for writing"
+                          );
+                          return;
+                      }
+
+                      try {
+                          output.write(
+                              data.getBytes(
+                                  StandardCharsets.UTF_8
+                              )
+                          );
+                          output.flush();
+                      } finally {
+                          output.close();
+                      }
+
+                      JSObject result =
+                          new JSObject();
+
+                      result.put(
+                          "success",
+                          true
+                      );
+                      result.put(
+                          "path",
+                          path
+                      );
+
+                      call.resolve(result);
+
+                  } catch (Exception e) {
+                      call.reject(
+                          "Could not write Markdown file",
+                          e
+                      );
+                  }
+              }
+
+              @com.getcapacitor.PluginMethod
+              public void createFolder(PluginCall call) {
+                  Uri vault = getVaultUri();
+
+                  if (
+                      vault == null
+                      || !canAccess(vault)
+                  ) {
+                      call.reject(
+                          "Notes folder permission is not available"
+                      );
+                      return;
+                  }
+
+                  String path =
+                      call.getString("path", "");
+
+                  try {
+                      if (resolveDirectory(vault, path) != null) {
+                          JSObject result =
+                              new JSObject();
+
+                          result.put(
+                              "success",
+                              true
+                          );
+                          call.resolve(result);
+                          return;
+                      }
+
+                      String name =
+                          fileName(path);
+
+                      String parentPath =
+                          parentPath(path);
+
+                      Uri parent =
+                          resolveDirectory(
+                              vault,
+                              parentPath
+                          );
+
+                      if (parent == null) {
+                          call.reject(
+                              "Parent folder not found"
+                          );
+                          return;
+                      }
+
+                      Uri created =
+                          createDirectory(
+                              parent,
+                              name
+                          );
+
+                      if (created == null) {
+                          call.reject(
+                              "Could not create folder"
+                          );
+                          return;
+                      }
+
+                      JSObject result =
+                          new JSObject();
+
+                      result.put(
+                          "success",
+                          true
+                      );
+
+                      call.resolve(result);
+
+                  } catch (Exception e) {
+                      call.reject(
+                          "Could not create folder",
+                          e
+                      );
+                  }
+              }
+
+              @com.getcapacitor.PluginMethod
+              public void rename(PluginCall call) {
+                  Uri vault = getVaultUri();
+
+                  if (
+                      vault == null
+                      || !canAccess(vault)
+                  ) {
+                      call.reject(
+                          "Notes folder permission is not available"
+                      );
+                      return;
+                  }
+
+                  String path =
+                      call.getString("path", "");
+
+                  String newName =
+                      call.getString("newName", "");
+
+                  try {
+                      Uri target =
+                          resolveDocument(
+                              vault,
+                              path
+                          );
+
+                      if (target == null) {
+                          call.reject("Item not found");
+                          return;
+                      }
+
+                      Uri renamed =
+                          DocumentsContract.renameDocument(
+                              getContext().getContentResolver(),
+                              target,
+                              newName
+                          );
+
+                      if (renamed == null) {
+                          call.reject(
+                              "Could not rename item"
+                          );
+                          return;
+                      }
+
+                      JSObject result =
+                          new JSObject();
+
+                      result.put(
+                          "success",
+                          true
+                      );
+
+                      call.resolve(result);
+
+                  } catch (Exception e) {
+                      call.reject(
+                          "Could not rename item",
+                          e
+                      );
+                  }
+              }
+
+              @com.getcapacitor.PluginMethod
+              public void delete(PluginCall call) {
+                  Uri vault = getVaultUri();
+
+                  if (
+                      vault == null
+                      || !canAccess(vault)
+                  ) {
+                      call.reject(
+                          "Notes folder permission is not available"
+                      );
+                      return;
+                  }
+
+                  String path =
+                      call.getString("path", "");
+
+                  try {
+                      Uri target =
+                          resolveDocument(
+                              vault,
+                              path
+                          );
+
+                      if (target == null) {
+                          call.reject("Item not found");
+                          return;
+                      }
+
+                      boolean success =
+                          DocumentsContract.deleteDocument(
+                              getContext().getContentResolver(),
+                              target
+                          );
+
+                      if (!success) {
+                          call.reject(
+                              "Could not delete item"
+                          );
+                          return;
+                      }
+
+                      JSObject result =
+                          new JSObject();
+
+                      result.put(
+                          "success",
+                          true
+                      );
+
+                      call.resolve(result);
+
+                  } catch (Exception e) {
+                      call.reject(
+                          "Could not delete item",
+                          e
+                      );
+                  }
+              }
+
+              @com.getcapacitor.PluginMethod
+              public void move(PluginCall call) {
+                  Uri vault = getVaultUri();
+
+                  if (
+                      vault == null
+                      || !canAccess(vault)
+                  ) {
+                      call.reject(
+                          "Notes folder permission is not available"
+                      );
+                      return;
+                  }
+
+                  String path =
+                      call.getString("path", "");
+
+                  String destination =
+                      call.getString(
+                          "destination",
+                          ""
+                      );
+
+                  try {
+                      Uri source =
+                          resolveDocument(
+                              vault,
+                              path
+                          );
+
+                      Uri sourceParent =
+                          resolveDirectory(
+                              vault,
+                              parentPath(path)
+                          );
+
+                      Uri destinationParent =
+                          resolveDirectory(
+                              vault,
+                              destination
+                          );
+
+                      if (
+                          source == null
+                          || sourceParent == null
+                          || destinationParent == null
+                      ) {
+                          call.reject(
+                              "Move source or destination not found"
+                          );
+                          return;
+                      }
+
+                      Uri moved =
+                          DocumentsContract.moveDocument(
+                              getContext().getContentResolver(),
+                              source,
+                              sourceParent,
+                              destinationParent
+                          );
+
+                      if (moved == null) {
+                          call.reject(
+                              "Could not move item"
+                          );
+                          return;
+                      }
+
+                      JSObject result =
+                          new JSObject();
+
+                      result.put(
+                          "success",
+                          true
+                      );
+
+                      call.resolve(result);
+
+                  } catch (Exception e) {
+                      call.reject(
+                          "Could not move item",
+                          e
+                      );
+                  }
+              }
+
+              private boolean canAccess(Uri uri) {
+                  try {
+                      Cursor cursor =
+                          getContext()
+                              .getContentResolver()
+                              .query(
+                                  uri,
+                                  new String[] {
+                                      DocumentsContract.Document.COLUMN_DOCUMENT_ID
+                                  },
+                                  null,
+                                  null,
+                                  null
+                              );
+
+                      if (cursor == null) {
+                          return false;
+                      }
+
+                      try {
+                          return cursor.moveToFirst();
+                      } finally {
+                          cursor.close();
+                      }
+
+                  } catch (Exception e) {
+                      return false;
+                  }
+              }
+
+              private Uri resolveDocument(
+                  Uri vault,
+                  String path
+              ) {
+                  if (
+                      path == null
+                      || path.trim().isEmpty()
+                  ) {
+                      return vault;
+                  }
+
+                  String[] parts =
+                      splitPath(path);
+
+                  Uri current = vault;
+
+                  for (int i = 0; i < parts.length; i++) {
+                      Uri next =
+                          findChild(
+                              current,
+                              parts[i]
+                          );
+
+                      if (next == null) {
+                          return null;
+                      }
+
+                      current = next;
+                  }
+
+                  return current;
+              }
+
+              private Uri resolveDirectory(
+                  Uri vault,
+                  String path
+              ) {
+                  Uri result =
+                      resolveDocument(
+                          vault,
+                          path
+                      );
+
+                  if (result == null) {
+                      return null;
+                  }
+
+                  return isDirectory(result)
+                      ? result
+                      : null;
+              }
+
+              private Uri resolveFile(
+                  Uri vault,
+                  String path
+              ) {
+                  Uri result =
+                      resolveDocument(
+                          vault,
+                          path
+                      );
+
+                  if (result == null) {
+                      return null;
+                  }
+
+                  return isDirectory(result)
+                      ? null
+                      : result;
+              }
+
+              private Uri findChildDirectory(
+                  Uri parent,
+                  String name
+              ) {
+                  Uri child =
+                      findChild(
+                          parent,
+                          name
+                      );
+
+                  if (
+                      child != null
+                      && isDirectory(child)
+                  ) {
+                      return child;
+                  }
+
+                  return null;
+              }
+
+              private Uri findChild(
+                  Uri parent,
+                  String name
+              ) {
+                  Cursor cursor = null;
+
+                  try {
+                      Uri children =
+                          DocumentsContract
+                              .buildChildDocumentsUriUsingTree(
+                                  parent,
+                                  DocumentsContract
+                                      .getTreeDocumentId(parent)
+                              );
+
+                      cursor =
+                          getContext()
+                              .getContentResolver()
+                              .query(
+                                  children,
+                                  new String[] {
+                                      DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                                      DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                                      DocumentsContract.Document.COLUMN_MIME_TYPE
+                                  },
+                                  null,
+                                  null,
+                                  null
+                              );
+
+                      if (cursor == null) {
+                          return null;
+                      }
+
+                      while (cursor.moveToNext()) {
+                          String id =
+                              cursor.getString(0);
+
+                          String displayName =
+                              cursor.getString(1);
+
+                          if (
+                              displayName.equals(name)
+                          ) {
+                              return DocumentsContract
+                                  .buildDocumentUriUsingTree(
+                                      parent,
+                                      id
+                                  );
+                          }
+                      }
+
+                  } catch (Exception ignored) {
+                  } finally {
+                      if (cursor != null) {
+                          cursor.close();
+                      }
+                  }
+
+                  return null;
+              }
+
+              private Uri createDirectory(
+                  Uri parent,
+                  String name
+              ) {
+                  try {
+                      Uri existing =
+                          findChildDirectory(
+                              parent,
+                              name
+                          );
+
+                      if (existing != null) {
+                          return existing;
+                      }
+
+                      return DocumentsContract
+                          .createDocument(
+                              getContext()
+                                  .getContentResolver(),
+                              parent,
+                              DocumentsContract
+                                  .Document.MIME_TYPE_DIR,
+                              name
+                          );
+
+                  } catch (Exception e) {
+                      return null;
+                  }
+              }
+
+              private Uri createFile(
+                  Uri parent,
+                  String name
+              ) {
+                  try {
+                      return DocumentsContract
+                          .createDocument(
+                              getContext()
+                                  .getContentResolver(),
+                              parent,
+                              "text/markdown",
+                              name
+                          );
+                  } catch (Exception e) {
+                      return null;
+                  }
+              }
+
+              private boolean isDirectory(Uri uri) {
+                  Cursor cursor = null;
+
+                  try {
+                      cursor =
+                          getContext()
+                              .getContentResolver()
+                              .query(
+                                  uri,
+                                  new String[] {
+                                      DocumentsContract.Document.COLUMN_MIME_TYPE
+                                  },
+                                  null,
+                                  null,
+                                  null
+                              );
+
+                      if (
+                          cursor != null
+                          && cursor.moveToFirst()
+                      ) {
+                          return DocumentsContract
+                              .Document.MIME_TYPE_DIR
+                              .equals(
+                                  cursor.getString(0)
+                              );
+                      }
+
+                  } catch (Exception ignored) {
+                  } finally {
+                      if (cursor != null) {
+                          cursor.close();
+                      }
+                  }
+
+                  return false;
+              }
+
+              private String[] splitPath(String path) {
+                  String clean =
+                      path
+                          .replace('\\', '/')
+                          .replaceAll(
+                              "^/+|/+$",
+                              ""
+                          );
+
+                  if (clean.isEmpty()) {
+                      return new String[0];
+                  }
+
+                  String[] raw =
+                      clean.split("/");
+
+                  List<String> result =
+                      new ArrayList<>();
+
+                  for (String part : raw) {
+                      if (
+                          part.isEmpty()
+                          || ".".equals(part)
+                          || "..".equals(part)
+                      ) {
+                          continue;
+                      }
+
+                      result.add(part);
+                  }
+
+                  return result.toArray(
+                      new String[0]
+                  );
+              }
+
+              private String fileName(String path) {
+                  String[] parts =
+                      splitPath(path);
+
+                  return parts.length == 0
+                      ? ""
+                      : parts[parts.length - 1];
+              }
+
+              private String parentPath(String path) {
+                  String[] parts =
+                      splitPath(path);
+
+                  if (parts.length <= 1) {
+                      return "";
+                  }
+
+                  StringBuilder result =
+                      new StringBuilder();
+
+                  for (
+                      int i = 0;
+                      i < parts.length - 1;
+                      i++
+                  ) {
+                      if (i > 0) {
+                          result.append('/');
+                      }
+
+                      result.append(parts[i]);
+                  }
+
+                  return result.toString();
+              }
+          }
+          JAVA
+
+          MAIN="android/app/src/main/java/com/coconutshell/takefastnotes/MainActivity.java"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(
+              "android/app/src/main/java/com/coconutshell/takefastnotes/MainActivity.java"
+          )
+
+          text = path.read_text()
+
+          if "VaultPlugin" not in text:
+              text = text.replace(
+                  "import com.getcapacitor.BridgeActivity;",
+                  "import com.getcapacitor.BridgeActivity;\n"
+                  "import com.coconutshell.takefastnotes.VaultPlugin;"
+              )
+
+              text = text.replace(
+                  "public class MainActivity extends BridgeActivity {",
+                  "public class MainActivity extends BridgeActivity {\n\n"
+                  "    @Override\n"
+                  "    public void onCreate(android.os.Bundle savedInstanceState) {\n"
+                  "        super.onCreate(savedInstanceState);\n"
+                  "        registerPlugin(VaultPlugin.class);\n"
+                  "    }"
+              )
+
+          path.write_text(text)
+          PY
+
       - name: Sync Capacitor
         run: npx cap sync android
 

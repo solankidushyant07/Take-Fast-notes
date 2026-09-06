@@ -1,9 +1,7 @@
 /* Take Fast Notes - app.js | Logic, Events, Gestures, and Editor */
 'use strict';
-if (NativeFS.available) {
-  NativeFS.ensureVault();
-}
-
+let vaultReady = false;
+let vaultInitializing = false;
 /* ---------- Selection Listeners ---------- */
 $('#selClose').addEventListener('click', exitSelection);
 $('#selAll').addEventListener('click', () => {
@@ -189,7 +187,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeAllOverlays();
 });
 
-window.addEventListener('jot-storage-error', () => {
+window.addEventListener('take-fast-notes-storage-error' , () => {
   setTimeout(() => {
     toast('Changes could not be saved. Free browser storage and try again.');
   }, 0);
@@ -533,20 +531,41 @@ content.addEventListener(
 );
 
 /* ---------- Folder actions ---------- */
-function createFolder(parent) {
-  const name = prompt(
-    parent
-      ? 'New subfolder name'
-      : 'New folder name',
-    ''
-  );
+async function createFolder(parent) {
+  if (
+    NativeFS.available
+    && !vaultReady
+  ) {
+    const ready =
+      await ensureVault();
 
-  if (name === null) return;
+    if (!ready) {
+      toast(
+        'Choose a notes folder first'
+      );
+      return;
+    }
+  }
 
-  const clean = name.trim();
+  const name =
+    prompt(
+      parent
+        ? 'New subfolder name'
+        : 'New folder name',
+      ''
+    );
+
+  if (name === null) {
+    return;
+  }
+
+  const clean =
+    name.trim();
 
   if (!clean) {
-    return toast('Folder name cannot be empty');
+    return toast(
+      'Folder name cannot be empty'
+    );
   }
 
   if (
@@ -554,7 +573,8 @@ function createFolder(parent) {
       n =>
         !n.trashed
         && n.parent === parent
-        && n.name.toLowerCase() === clean.toLowerCase()
+        && n.name.toLowerCase()
+          === clean.toLowerCase()
     )
   ) {
     return toast(
@@ -563,28 +583,52 @@ function createFolder(parent) {
   }
 
   const nb = {
-    id:uid(),
-    name:clean,
-    parent:parent || null,
-    open:false
+    id: uid(),
+    name: clean,
+    parent: parent || null,
+    open: false
   };
+
+  const folder =
+    parent
+      ? NativeFS.folderPath(parent)
+        + '/'
+        + clean
+      : clean;
+
+  if (
+    NativeFS.available
+    && vaultReady
+  ) {
+    const success =
+      await NativeFS.createFolder(
+        folder
+      );
+
+    if (!success) {
+      toast(
+        'Could not create folder'
+      );
+      return;
+    }
+  }
 
   db.notebooks.push(nb);
 
-if (parent) {
-  const p = byNb(parent);
+  if (parent) {
+    const p =
+      byNb(parent);
 
-  if (p) p.open = true;
+    if (p) {
+      p.open = true;
+    }
+  }
+
+  save();
+  renderScreen();
+
+  toast('Folder created');
 }
-
-save();
-
-if (NativeFS.available) {
-  NativeFS.createFolder(nb);
-}
-
-renderScreen();
-toast('Folder created');
 
 function openFolderActions(id, pos = null) {
   folderActionTarget = id;
@@ -1017,44 +1061,61 @@ function setSave(text) {
   );
 }
 
-function commit() {
-  if (!editing || editingReadonly) return;
+async function commit() {
+  if (
+    !editing
+    || editingReadonly
+  ) {
+    return;
+  }
 
-  const n = byId(editing);
+  const n =
+    byId(editing);
 
-  if (!n) return;
+  if (!n) {
+    return;
+  }
 
   const title =
     titleInput.value.trim();
 
   const body =
-    sanitize(bodyInput.innerHTML);
+    sanitize(
+      bodyInput.innerHTML
+    );
 
-  if (
-  n.title !== title
-  || n.body !== body
-) {
-  const oldPath = n.filePath;
+  const changed =
+    n.title !== title
+    || n.body !== body;
 
   n.title = title;
   n.body = body;
-  n.updated = Date.now();
+
+  if (changed) {
+    n.updated =
+      Date.now();
+  }
 
   if (!save()) {
     setSave('Storage full');
     return;
   }
 
-  if (NativeFS.available) {
-  NativeFS.renameNoteFile(
-    n,
-    oldPath
-  ).then(success => {
+  if (
+    NativeFS.available
+    && vaultReady
+    && changed
+  ) {
+    const success =
+      await writeNoteToVault(n);
+
     if (!success) {
-      toast('Could not save Markdown file');
+      setSave('File could not be saved');
+      toast(
+        'Could not save Markdown file'
+      );
+      return;
     }
-  });
-}
   }
 
   setSave('Saved');
@@ -1503,6 +1564,11 @@ sheetContent.addEventListener(
       if (a.dataset.action === 'import') {
         mdImport.click();
       }
+      if (
+  a.dataset.action === 'change-vault'
+) {
+  changeNotesFolder();
+      }
 
       return;
     }
@@ -1693,78 +1759,134 @@ sheetContent.addEventListener(
 );
 
 /* ---------- Create / import / export ---------- */
-function createNote() {
-  const now = Date.now();
 
-  const note = {
-    id:uid(),
-    title:'',
-    body:'',
-    created:now,
-    updated:now,
-    viewed:now,
-    pinned:false,
-    fav:false,
-    nb:
-      screen.type === 'notebook'
-        ? screen.id
-        : null,
-    tags:
-      screen.type === 'tag'
-        ? [screen.tag]
-        : [],
-    color:'white',
-    zoom:100
-  };
+async function changeNotesFolder() {
+  if (!NativeFS.available) {
+    toast(
+      'Folder selection is only available in the Android app'
+    );
 
-db.notes.push(note);
+    return;
+  }
 
-save();
+  const confirmed =
+    confirm(
+      'Choose a new location for Take Fast Notes.\n\n'
+      + 'Your current notes folder will not be moved, deleted, or changed.'
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const result =
+    await NativeFS.chooseFolder();
+
+  if (!result?.success) {
+    toast(
+      result?.cancelled
+        ? 'Folder selection cancelled'
+        : 'Could not change notes folder'
+    );
+
+    return;
+  }
+
+  vaultReady = false;
+
+  await syncVaultToDb();
+
+  vaultReady = true;
+
+  nav({
+    type: 'notes',
+    filter: 'all'
+  });
+
+  toast(
+    'Notes folder changed'
+  );
+}
 
 async function createNote() {
-  const now = Date.now();
+  if (
+    NativeFS.available
+    && !vaultReady
+  ) {
+    const ready =
+      await ensureVault();
+
+    if (!ready) {
+      toast(
+        'Choose a notes folder first'
+      );
+      return;
+    }
+  }
+
+  const now =
+    Date.now();
 
   const note = {
     id: uid(),
+
     title: '',
+
     body: '',
+
     created: now,
     updated: now,
     viewed: now,
+
     pinned: false,
     fav: false,
+
     nb:
       screen.type === 'notebook'
         ? screen.id
         : null,
+
     tags:
       screen.type === 'tag'
         ? [screen.tag]
         : [],
+
     color: 'white',
     zoom: 100
   };
 
   db.notes.push(note);
 
-  save();
+  if (
+    NativeFS.available
+    && vaultReady
+  ) {
+    const success =
+      await writeNoteToVault(
+        note
+      );
 
-  if (NativeFS.available) {
-    const created =
-      await NativeFS.writeNote(note);
+    if (!success) {
+      db.notes =
+        db.notes.filter(
+          n => n.id !== note.id
+        );
 
-    if (!created) {
-      toast('Could not create Markdown file');
+      toast(
+        'Could not create Markdown file'
+      );
+
+      return;
     }
   }
+
+  save();
 
   openEditor(
     note.id,
     true,
     false
   );
-}
-  
 }
 
 fab.addEventListener(
@@ -2259,11 +2381,29 @@ function openSettings() {
     + '</div>'
     + '</div>'
 
-    + '<div class="settings-group">'
-    + '<div class="settings-label">Storage</div>'
-    + '<div class="sheet-note">Notes are stored locally in this browser/device. Clearing site data can remove them.</div>'
-    + '</div>'
++ '<div class="settings-group">'
++ '<div class="settings-label">Storage</div>'
 
++ '<div class="sheet-note">'
++ (
+    NativeFS.available
+      ? 'Notes are stored in the selected Take Fast Notes folder.'
+      : 'The web version stores notes locally in this browser.'
+  )
++ '</div>'
+
++ (
+    NativeFS.available
+      ? (
+        '<button class="sheet-item" data-action="change-vault">'
+        + '<span class="nt-name">Change Notes Folder</span>'
+        + '</button>'
+      )
+      : ''
+  )
+
++ '</div>'
+    
     + '<button class="sheet-item" data-action="export">'
     + ic('export')
     + '<span class="nt-name">Export all notes</span>'
@@ -2402,6 +2542,305 @@ window.addEventListener(
   updateKeyboardInset
 );
 
+/* ---------- Markdown Vault ---------- */
+
+function vaultMarkdownToNote(
+  item,
+  markdown,
+  folderMap
+) {
+  const now =
+    Number(item.modified)
+    || Date.now();
+
+  const title =
+    item.name.replace(
+      /\.md$/i,
+      ''
+    );
+
+  const note = {
+    id: uid(),
+
+    title,
+
+    body:
+      mdToHtml(
+        markdown
+      ),
+
+    created: now,
+    updated: now,
+    viewed: now,
+
+    pinned: false,
+    fav: false,
+
+    nb:
+      folderMap.get(
+        parentFolderPath(
+          item.path
+        )
+      )
+      || null,
+
+    tags: [],
+
+    color: 'white',
+    zoom: 100,
+
+    filePath: item.path
+  };
+
+  return note;
+}
+
+function parentFolderPath(path) {
+  const clean =
+    String(path || '')
+      .replace(/^\/+|\/+$/g, '');
+
+  const parts =
+    clean.split('/');
+
+  if (parts.length <= 1) {
+    return '';
+  }
+
+  parts.pop();
+
+  return parts.join('/');
+}
+
+async function scanVaultFolder(
+  path,
+  parentId,
+  folderMap,
+  notes
+) {
+  const items =
+    await NativeFS.list(path);
+
+  for (const item of items) {
+    if (item.directory) {
+      const id = uid();
+
+      db.notebooks.push({
+        id,
+        name: item.name,
+        parent: parentId,
+        open: false
+      });
+
+      folderMap.set(
+        item.path,
+        id
+      );
+
+      await scanVaultFolder(
+        item.path,
+        id,
+        folderMap,
+        notes
+      );
+
+      continue;
+    }
+
+    if (
+      !item.name
+        .toLowerCase()
+        .endsWith('.md')
+    ) {
+      continue;
+    }
+
+    const markdown =
+      await NativeFS.readFile(
+        item.path
+      );
+
+    if (markdown === null) {
+      continue;
+    }
+
+    notes.push({
+      item,
+      markdown
+    });
+  }
+}
+
+async function syncVaultToDb() {
+  if (!NativeFS.available) {
+    return false;
+  }
+
+  db.notes = [];
+  db.notebooks = [];
+
+  const folderMap =
+    new Map();
+
+  const importedNotes = [];
+
+  await scanVaultFolder(
+    '',
+    null,
+    folderMap,
+    importedNotes
+  );
+
+  for (
+    const entry of importedNotes
+  ) {
+    db.notes.push(
+      vaultMarkdownToNote(
+        entry.item,
+        entry.markdown,
+        folderMap
+      )
+    );
+  }
+
+  save();
+
+  return true;
+}
+
+async function ensureVault() {
+  if (
+    !NativeFS.available
+  ) {
+    return true;
+  }
+
+  if (vaultReady) {
+    return true;
+  }
+
+  if (vaultInitializing) {
+    return false;
+  }
+
+  vaultInitializing = true;
+
+  try {
+    const result =
+      await NativeFS.initialize();
+
+    if (!result.ready) {
+      return false;
+    }
+
+    await syncVaultToDb();
+
+    vaultReady = true;
+
+    return true;
+
+  } finally {
+    vaultInitializing = false;
+  }
+}
+
+function markdownForNote(note) {
+  const title =
+    cleanMarkdownTitle(
+      note.title
+    );
+
+  const body =
+    htmlToMd(
+      note.body || ''
+    );
+
+  if (!body.trim()) {
+    return '# ' + title + '\n';
+  }
+
+  return (
+    '# '
+    + title
+    + '\n\n'
+    + body
+  );
+}
+
+function cleanMarkdownTitle(
+  value
+) {
+  return String(
+    value || 'Untitled'
+  )
+    .trim()
+    .replace(
+      /[\r\n]/g,
+      ' '
+    )
+    .replace(
+      /[\/\\:*?"<>|]/g,
+      '-'
+    )
+    || 'Untitled';
+}
+
+async function writeNoteToVault(
+  note
+) {
+  if (
+    !NativeFS.available
+    || !vaultReady
+    || !note
+  ) {
+    return true;
+  }
+
+  const path =
+    NativeFS.notePath(note);
+
+  const folder =
+    note.nb
+      ? NativeFS.folderPath(
+          note.nb
+        )
+      : '';
+
+  if (folder) {
+    const parts =
+      folder.split('/');
+
+    let current = '';
+
+    for (const part of parts) {
+      current =
+        current
+          ? current + '/' + part
+          : part;
+
+      if (
+        !(await NativeFS.createFolder(
+          current
+        ))
+      ) {
+        return false;
+      }
+    }
+  }
+
+  const success =
+    await NativeFS.writeFile(
+      path,
+      markdownForNote(note)
+    );
+
+  if (success) {
+    note.filePath = path;
+  }
+
+  return success;
+}
+
 /* ---------- Init ---------- */
 function openDefaultStartPlace() {
   if (
@@ -2416,4 +2855,35 @@ function openDefaultStartPlace() {
 
 applyTheme();
 updateKeyboardInset();
-openDefaultStartPlace();
+
+async function startTakeFastNotes() {
+  if (NativeFS.available) {
+    const hasPermission =
+      await NativeFS.hasPermission();
+
+    if (!hasPermission) {
+      alert(
+        'Take Fast Notes needs access to a folder where it can store your notes.\n\n'
+        + 'Choose the location where you want the '
+        + '"Take Fast Notes" folder to be created.'
+      );
+    }
+
+    const ready =
+      await ensureVault();
+
+    if (!ready) {
+      renderScreen();
+
+      toast(
+        'Choose a notes folder to continue'
+      );
+
+      return;
+    }
+  }
+
+  openDefaultStartPlace();
+}
+
+startTakeFastNotes();

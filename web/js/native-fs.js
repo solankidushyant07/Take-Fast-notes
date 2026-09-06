@@ -1,42 +1,58 @@
 /* Take Fast Notes - native-fs.js
- * Android Markdown vault using Capacitor Filesystem.
+ * Android Storage Access Framework vault bridge.
  */
 
 'use strict';
 
 const NativeFS = (() => {
-  const capacitor = window.Capacitor;
 
-  const filesystem =
-    capacitor?.Plugins?.Filesystem || null;
+  const capacitor =
+    window.Capacitor || null;
 
-  const available = !!filesystem;
+  const plugin =
+    capacitor?.Plugins?.TakeFastNotesVault || null;
 
-  const DIRECTORY = 'DOCUMENTS';
-  const ENCODING = 'utf8';
-  const VAULT = 'Take Fast Notes';
+  const available =
+    !!plugin;
 
-  let permissionReady = false;
-
-  function cleanName(value, fallback = 'Untitled') {
-    const name = String(value ?? '')
-      .trim()
-      .replace(/[\/\\:*?"<>|]/g, '-')
-      .replace(/\s+/g, ' ');
+  function cleanName(
+    value,
+    fallback = 'Untitled'
+  ) {
+    const name =
+      String(value ?? '')
+        .trim()
+        .replace(/[\/\\:*?"<>|]/g, '-')
+        .replace(/\s+/g, ' ');
 
     return name || fallback;
   }
 
   function noteName(note) {
-    return cleanName(note.title, 'Untitled') + '.md';
+    return (
+      cleanName(
+        note?.title,
+        'Untitled'
+      )
+      + '.md'
+    );
   }
 
-  function folderPath(id) {
+  function folderPath(folderId) {
     const parts = [];
-    let current = id ? byNb(id) : null;
-    const seen = new Set();
 
-    while (current && !seen.has(current.id)) {
+    let current =
+      folderId
+        ? byNb(folderId)
+        : null;
+
+    const seen =
+      new Set();
+
+    while (
+      current
+      && !seen.has(current.id)
+    ) {
       seen.add(current.id);
 
       parts.unshift(
@@ -46,283 +62,290 @@ const NativeFS = (() => {
         )
       );
 
-      current = current.parent
-        ? byNb(current.parent)
-        : null;
+      current =
+        current.parent
+          ? byNb(current.parent)
+          : null;
     }
 
-    return parts.length
-      ? VAULT + '/' + parts.join('/')
-      : VAULT;
+    return parts.join('/');
   }
 
   function notePath(note) {
     const folder =
-      note.nb
+      note?.nb
         ? folderPath(note.nb)
-        : VAULT;
+        : '';
 
-    return folder + '/' + noteName(note);
+    const name =
+      noteName(note);
+
+    return folder
+      ? folder + '/' + name
+      : name;
   }
 
-  async function requestPermission() {
+  async function chooseFolder() {
     if (!available) {
-      console.warn(
-        'Take Fast Notes: Capacitor Filesystem is not available.'
-      );
-
-      return false;
-    }
-
-    if (permissionReady) {
-      return true;
+      return {
+        success: false,
+        unavailable: true
+      };
     }
 
     try {
-      const status =
-        await filesystem.checkPermissions();
-
-      if (
-        status.publicStorage === 'granted'
-      ) {
-        permissionReady = true;
-        return true;
-      }
-
-      const requested =
-        await filesystem.requestPermissions();
-
-      if (
-        requested.publicStorage === 'granted'
-      ) {
-        permissionReady = true;
-        return true;
-      }
-
-      console.error(
-        'Take Fast Notes: storage permission was not granted.',
-        requested
-      );
-
-      return false;
-
+      return await plugin.chooseFolder();
     } catch (error) {
       console.error(
-        'Take Fast Notes: permission request failed.',
+        'Take Fast Notes: folder selection failed.',
         error
       );
 
-      return false;
+      return {
+        success: false,
+        cancelled: true,
+        error
+      };
     }
   }
 
-  async function mkdir(path) {
-    if (!await requestPermission()) {
-      return false;
-    }
-
-    try {
-      await filesystem.mkdir({
-        path,
-        directory: DIRECTORY,
-        recursive: true
-      });
-
-      return true;
-
-    } catch (error) {
-
-      const message =
-        String(error?.message || '')
-          .toLowerCase();
-
-      if (!message.includes('exist')) {
-        console.error(
-          'Take Fast Notes: mkdir failed.',
-          error
-        );
-      }
-
-      return false;
-    }
-  }
-
-  async function ensureVault() {
+  async function hasPermission() {
     if (!available) {
       return false;
     }
 
-    if (!await requestPermission()) {
+    try {
+      const result =
+        await plugin.hasPermission();
+
+      return !!result?.valid;
+
+    } catch {
       return false;
     }
-
-    return mkdir(VAULT);
   }
 
-  async function writeNote(note) {
-    if (!available || !note) {
-      return false;
-    }
-
-    if (!await requestPermission()) {
-      return false;
+  async function getVault() {
+    if (!available) {
+      return null;
     }
 
     try {
-      const path = notePath(note);
-
-      const folder =
-        note.nb
-          ? folderPath(note.nb)
-          : VAULT;
-
-      const folderCreated =
-        await mkdir(folder);
-
-      if (!folderCreated) {
-        console.error(
-          'Take Fast Notes: could not create note folder.',
-          folder
-        );
-
-        return false;
-      }
-
-      const markdown =
-        '# ' +
-        cleanName(note.title, 'Untitled') +
-        '\n\n' +
-        htmlToMd(note.body || '');
-
       const result =
-        await filesystem.writeFile({
-          path,
-          directory: DIRECTORY,
-          data: markdown,
-          encoding: ENCODING
+        await plugin.getVault();
+
+      return result?.valid
+        ? result
+        : null;
+
+    } catch {
+      return null;
+    }
+  }
+
+  async function initialize() {
+    if (!available) {
+      return {
+        available: false,
+        ready: false
+      };
+    }
+
+    if (await hasPermission()) {
+      return {
+        available: true,
+        ready: true
+      };
+    }
+
+    const result =
+      await chooseFolder();
+
+    if (!result?.success) {
+      return {
+        available: true,
+        ready: false,
+        cancelled:
+          !!result?.cancelled
+      };
+    }
+
+    return {
+      available: true,
+      ready: true
+    };
+  }
+
+  async function list(path = '') {
+    if (!available) {
+      return [];
+    }
+
+    try {
+      const result =
+        await plugin.list({
+          path
         });
 
-      note.filePath = path;
+      return Array.isArray(result?.items)
+        ? result.items
+        : [];
 
-      console.log(
-        'Take Fast Notes: Markdown created:',
+    } catch (error) {
+      console.error(
+        'Take Fast Notes: list failed.',
+        error
+      );
+
+      return [];
+    }
+  }
+
+  async function readFile(path) {
+    if (!available) {
+      return null;
+    }
+
+    try {
+      const result =
+        await plugin.readFile({
+          path
+        });
+
+      return result?.data ?? null;
+
+    } catch (error) {
+      console.error(
+        'Take Fast Notes: read failed.',
         path,
-        result
-      );
-
-      return true;
-
-    } catch (error) {
-
-      console.error(
-        'Take Fast Notes: could not write Markdown note.',
         error
       );
 
-      return false;
+      return null;
     }
   }
 
-  async function createFolder(folder) {
-    if (!available || !folder) {
-      return false;
-    }
-
-    if (!await requestPermission()) {
+  async function writeFile(
+    path,
+    data
+  ) {
+    if (!available) {
       return false;
     }
 
     try {
-      return await mkdir(
-        folderPath(folder.id)
-      );
-
-    } catch (error) {
-
-      console.error(
-        'Take Fast Notes: could not create folder.',
-        error
-      );
-
-      return false;
-    }
-  }
-
-  async function renameNoteFile(note, oldPath) {
-    if (!available || !note) {
-      return false;
-    }
-
-    if (!await requestPermission()) {
-      return false;
-    }
-
-    const newPath =
-      notePath(note);
-
-    if (
-      !oldPath ||
-      oldPath === newPath
-    ) {
-      return writeNote(note);
-    }
-
-    try {
-
-      await mkdir(
-        note.nb
-          ? folderPath(note.nb)
-          : VAULT
-      );
-
-      await filesystem.rename({
-        from: oldPath,
-        to: newPath,
-        directory: DIRECTORY
+      await plugin.writeFile({
+        path,
+        data
       });
 
-      note.filePath = newPath;
-
       return true;
 
     } catch (error) {
-
-      console.warn(
-        'Take Fast Notes: rename failed; creating new Markdown file.',
+      console.error(
+        'Take Fast Notes: write failed.',
+        path,
         error
       );
 
-      return writeNote(note);
+      return false;
     }
   }
 
-  async function deleteNote(note) {
-    if (
-      !available ||
-      !note?.filePath
-    ) {
-      return false;
-    }
-
-    if (!await requestPermission()) {
+  async function createFolder(path) {
+    if (!available) {
       return false;
     }
 
     try {
-
-      await filesystem.deleteFile({
-        path: note.filePath,
-        directory: DIRECTORY
+      await plugin.createFolder({
+        path
       });
-
-      delete note.filePath;
 
       return true;
 
     } catch (error) {
-
       console.error(
-        'Take Fast Notes: could not delete Markdown note.',
+        'Take Fast Notes: folder creation failed.',
+        path,
+        error
+      );
+
+      return false;
+    }
+  }
+
+  async function rename(
+    path,
+    newName
+  ) {
+    if (!available) {
+      return false;
+    }
+
+    try {
+      await plugin.rename({
+        path,
+        newName
+      });
+
+      return true;
+
+    } catch (error) {
+      console.error(
+        'Take Fast Notes: rename failed.',
+        path,
+        error
+      );
+
+      return false;
+    }
+  }
+
+  async function remove(path) {
+    if (!available) {
+      return false;
+    }
+
+    try {
+      await plugin.delete({
+        path
+      });
+
+      return true;
+
+    } catch (error) {
+      console.error(
+        'Take Fast Notes: delete failed.',
+        path,
+        error
+      );
+
+      return false;
+    }
+  }
+
+  async function move(
+    path,
+    destination
+  ) {
+    if (!available) {
+      return false;
+    }
+
+    try {
+      await plugin.move({
+        path,
+        destination
+      });
+
+      return true;
+
+    } catch (error) {
+      console.error(
+        'Take Fast Notes: move failed.',
+        path,
+        destination,
         error
       );
 
@@ -332,13 +355,20 @@ const NativeFS = (() => {
 
   return {
     available,
-    requestPermission,
-    ensureVault,
+    initialize,
+    chooseFolder,
+    hasPermission,
+    getVault,
+    list,
+    readFile,
+    writeFile,
     createFolder,
-    writeNote,
-    renameNoteFile,
-    deleteNote,
+    rename,
+    remove,
+    move,
+    noteName,
     notePath,
     folderPath
   };
+
 })();

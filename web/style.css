@@ -893,3 +893,59 @@ svg {
 .bottom-btn.danger {
   color: var(--danger);
 }
+
+/* ---------- Light theme ---------- */
+html[data-theme="light"] {
+  --bg: #F7F5F1;
+  --bg-subtle: #EFEEE9;
+  --surface: #FFFFFF;
+  --surface-card: #FFFFFF;
+  --surface-card-active: #F0EEE9;
+  --surface-pill: #E9E6DF;
+  --text: #1C1C1E;
+  --text-2: #6E6E73;
+  --text-3: #8A8985;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-card: rgba(0, 0, 0, 0.07);
+  --accent-soft: rgba(245, 166, 35, 0.14);
+  --accent-sel: #FFF0D4;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.10);
+  --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.08);
+  color-scheme: light;
+}
+
+html[data-theme="light"] .bg-white { background-color: #FFFFFF; }
+html[data-theme="light"] .bg-orange { background-color: #FFF2E5; }
+html[data-theme="light"] .bg-pink { background-color: #FFF0F3; }
+html[data-theme="light"] .bg-blue { background-color: #EEF5FF; }
+html[data-theme="light"] .bg-yellow { background-color: #FFF8DF; }
+html[data-theme="light"] .bg-green { background-color: #EEF8EF; }
+
+/* ---------- Real list/grid layout switch ---------- */
+.content-cards.grid-view {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 12px;
+}
+.content-cards.grid-view .swipe-wrap { min-width: 0; }
+.content-cards.grid-view .note-card { min-height: 150px; padding: 14px; }
+.content-cards.grid-view .card-title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.content-cards.grid-view .card-preview { -webkit-line-clamp: 4; }
+
+.folder-more {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  flex: 0 0 34px;
+}
+.folder-more svg { width: 18px; height: 18px; }
+.sheet-count { margin-left: auto; color: var(--text-3); font-size: 12px; }
+
+@media (max-width: 420px) {
+  .content-cards.grid-view { grid-template-columns: 1fr 1fr; gap: 9px; padding-left: 12px; padding-right: 12px; }
+  .content-cards.grid-view .note-card { border-radius: 15px; }
+}

@@ -420,7 +420,6 @@ function applyMd(note, text) {
 const KEY = 'fastnote.v2';
 const TRASH_DAYS = 30; // Items are permanently deleted after 30 days
 
-// Shell, this returns an empty array now. No more ghost folders!
 function seedNB() {
   return [];
 }
@@ -441,7 +440,8 @@ if (!db || !Array.isArray(db.notes)) {
       theme: 'dark',
       viewMode: 'list',
       sortBy: 'default',
-      startPlace: 'home'
+      startPlace: 'home',
+      defFolder: null
     }
   };
 }
@@ -451,6 +451,7 @@ db.prefs = {
   viewMode: 'list',
   sortBy: 'default',
   startPlace: 'home',
+  defFolder: null,
   ...(db.prefs || {})
 };
 

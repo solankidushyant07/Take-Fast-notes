@@ -1,228 +1,81 @@
-/* Take Fast Notes - app.js | Logic, Events, Gestures, and Editor */
+/* Take Fast Notes - app.js | Events, Gestures, Navigation, and Editor */
 'use strict';
+
 let vaultReady = false;
 let vaultInitializing = false;
+
+/* ---------- Top Navigation Tabs ---------- */
+navTabNotes.addEventListener('click', () => {
+  currentTab = 'notes';
+  nav({ type: 'notes', filter: 'all' });
+});
+
+navTabTasks.addEventListener('click', () => {
+  currentTab = 'tasks';
+  renderScreen();
+});
+
+navTabSettings.addEventListener('click', () => {
+  openSettings();
+});
+
 /* ---------- Selection Listeners ---------- */
 $('#selClose').addEventListener('click', exitSelection);
+
 $('#selAll').addEventListener('click', () => {
-  if (visibleIds.every(id => selSet.has(id))) selSet.clear(); else visibleIds.forEach(id => selSet.add(id));
-  if (!selSet.size) exitSelection(); else { renderContent(); selCount.textContent = countLabel(selSet.size,'selected'); }
-});
-$('#selPin').addEventListener('click', () => { selSet.forEach(id => { const n = byId(id); if (n) n.pinned = true; }); save(); toast('Pinned'); exitSelection(); });
-$('#selFav').addEventListener('click', () => { selSet.forEach(id => { const n = byId(id); if (n) n.fav = true; }); save(); toast('Added to favorites'); exitSelection(); });
-$('#selTrash').addEventListener('click', () => { const count = selSet.size; selSet.forEach(id => moveNoteToTrash(id, false)); save(); toast(countLabel(count,'note') + ' moved to Trash'); exitSelection(); });
+  if (visibleIds.every(id => selSet.has(id))) selSet.clear();
+  else visibleIds.forEach(id => selSet.add(id));
 
-/* ---------- Drawer Listeners ---------- */
-sideBtn.addEventListener('click', openDrawer);
-drawerBody.addEventListener('click', e => {
-  if (Date.now() < suppressClickUntil) return;
-  if (e.target.closest('#nbAdd')) { createFolder(null); return; }
-
-  const chev = e.target.closest('[data-chev]');
-  if (chev) {
-    e.stopPropagation();
-
-    const nb = byNb(chev.dataset.chev);
-
-    if (nb) {
-      nb.open = !nb.open;
-      save();
-      renderDrawer();
-    }
-
-    return;
-  }
-
-  const go = e.target.closest('[data-go]');
-
-  if (go) {
-    const value = go.dataset.go;
-
-    if (value === 'all') nav({type:'notes',filter:'all'});
-    else if (value === 'recent') nav({type:'notes',filter:'recent'});
-    else if (value === 'favorites') nav({type:'notes',filter:'favorites'});
-    else if (value === 'notebooks') nav({type:'notebooks'});
-    else if (value === 'tags') nav({type:'tags'});
-    else if (value === 'trash') nav({type:'trash'});
-
-    return;
-  }
-
-  const nb = e.target.closest('[data-nb]');
-
-  if (nb) {
-    nav({
-      type:'notebook',
-      id:nb.dataset.nb
-    });
+  if (!selSet.size) exitSelection();
+  else {
+    renderContent();
+    selCount.textContent = countLabel(selSet.size, 'selected');
   }
 });
 
-/* ---------- Mobile long-press on Drawer (Contextual Popup) ---------- */
-let dGesture = null;
-
-drawerBody.addEventListener('touchstart', e => {
-  if (e.touches.length !== 1) return;
-
-  const row = e.target.closest('.d-item[data-nb]');
-
-  if (!row) return;
-
-  dGesture = {
-    row,
-    x: e.touches[0].clientX,
-    y: e.touches[0].clientY,
-    fired: false
-  };
-
-  dGesture.timer = setTimeout(() => {
-    if (!dGesture) return;
-
-    dGesture.fired = true;
-
-    if (navigator.vibrate) navigator.vibrate(20);
-
-    openFolderActions(row.dataset.nb, {
-      x: dGesture.x,
-      y: dGesture.y
-    });
-  }, 480);
-
-  row.classList.add('holding');
-}, {
-  passive: true
+$('#selPin').addEventListener('click', () => {
+  selSet.forEach(id => { const n = byId(id); if (n) n.pinned = true; });
+  save();
+  toast('Pinned');
+  exitSelection();
 });
 
-drawerBody.addEventListener('touchmove', e => {
-  if (!dGesture) return;
-
-  const dx = e.touches[0].clientX - dGesture.x;
-  const dy = e.touches[0].clientY - dGesture.y;
-
-  if (Math.abs(dy) > 12 || Math.abs(dx) > 12) {
-    clearTimeout(dGesture.timer);
-    dGesture.row.classList.remove('holding');
-    dGesture = null;
-  }
-}, {
-  passive: true
+$('#selFav').addEventListener('click', () => {
+  selSet.forEach(id => { const n = byId(id); if (n) n.fav = true; });
+  save();
+  toast('Added to favorites');
+  exitSelection();
 });
 
-function finishDGesture() {
-  if (!dGesture) return;
-
-  clearTimeout(dGesture.timer);
-
-  dGesture.row.classList.remove('holding');
-
-  if (dGesture.fired) {
-    suppressClickUntil = Date.now() + 350;
-  }
-
-  dGesture = null;
-}
-
-drawerBody.addEventListener('touchend', finishDGesture, {
-  passive: true
+$('#selTrash').addEventListener('click', () => {
+  const count = selSet.size;
+  selSet.forEach(id => moveNoteToTrash(id, false));
+  save();
+  toast(countLabel(count, 'note') + ' moved to Trash');
+  exitSelection();
 });
 
-drawerBody.addEventListener('touchcancel', finishDGesture, {
-  passive: true
-});
-
-/* ---------- Global edge gestures (Obsidian style) ---------- */
-let edgeStart = null;
-
-document.addEventListener('touchstart', e => {
-  if (
-    homeView.hidden
-    || !menuEl.hidden
-    || !sheet.hidden
-    || e.touches.length !== 1
-  ) {
-    return;
-  }
-
-  edgeStart = {
-    x: e.touches[0].clientX,
-    y: e.touches[0].clientY
-  };
-}, {
-  passive: true
-});
-
-document.addEventListener('touchmove', e => {
-  if (!edgeStart) return;
-
-  const dx = e.touches[0].clientX - edgeStart.x;
-  const dy = e.touches[0].clientY - edgeStart.y;
-
-  const isDrawerOpen = drawer.classList.contains('open');
-
-  if (!isDrawerOpen) {
-    if (dx > 30 && dx > Math.abs(dy) * 1.5) {
-      openDrawer();
-      edgeStart = null;
-    }
-  } else {
-    if (dx < -30 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      closeDrawer();
-      edgeStart = null;
-    }
-  }
-}, {
-  passive: true
-});
-
-document.addEventListener('touchend', () => {
-  edgeStart = null;
-}, {
-  passive: true
-});
-
-/* ---------- Overlays & Menu Handlers ---------- */
-scrim.addEventListener('click', closeAllOverlays);
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeAllOverlays();
-});
-
-window.addEventListener('take-fast-notes-storage-error' , () => {
-  setTimeout(() => {
-    toast('Changes could not be saved. Free browser storage and try again.');
-  }, 0);
-});
-
-menuEl.addEventListener('click', e => {
-  const item = e.target.closest('[data-mi]');
-
-  if (!item) return;
-
-  const action = menuItems[Number(item.dataset.mi)];
-
-  if (action?.fn) action.fn();
-
-  closeMenu();
-});
-
-/* ---------- Home interactions ---------- */
+/* ---------- Category Row Interactions ---------- */
 filterRow.addEventListener('click', e => {
-  const chip = e.target.closest('[data-chip]');
+  const folderNav = e.target.closest('[data-action="open-folder-browser"]');
+  if (folderNav) {
+    openFolderBrowserSheet();
+    return;
+  }
 
-  if (!chip) return;
+  const allPill = e.target.closest('[data-cat="all"]');
+  if (allPill) {
+    nav({ type: 'notes', filter: 'all' });
+    return;
+  }
 
-  if (chip.dataset.chip === 'notebooks') {
-    nav({type:'notebooks'});
-  } else if (chip.dataset.chip === 'tags') {
-    nav({type:'tags'});
-  } else {
-    nav({
-      type:'notes',
-      filter:chip.dataset.chip
-    });
+  const folderPill = e.target.closest('[data-folder-pill]');
+  if (folderPill) {
+    nav({ type: 'notebook', id: folderPill.dataset.folderPill });
   }
 });
 
+/* ---------- Search Bar ---------- */
 searchInput.addEventListener('input', () => {
   searchClear.hidden = !searchInput.value;
   renderContent();
@@ -235,575 +88,211 @@ searchClear.addEventListener('click', () => {
   searchInput.focus();
 });
 
-viewBtn.addEventListener('click', () => {
-  db.prefs.viewMode =
-    db.prefs.viewMode === 'grid'
-      ? 'list'
-      : 'grid';
-
-  save();
-  renderScreen();
-});
-
-sortBtn.addEventListener('click', () => {
-  const s = db.prefs.sortBy;
-
-  openSheet(
-    'Sort notes',
-    [
-      ['default','Recently modified'],
-      ['updatedOld','Least recently modified'],
-      ['alphaAsc','Title A–Z'],
-      ['alphaDesc','Title Z–A'],
-      ['createdNew','Created newest'],
-      ['createdOld','Created oldest'],
-      ['viewedNew','Recently opened']
-    ]
-      .map(([id,label]) =>
-        '<button class="sheet-item'
-        + (s === id ? ' on' : '')
-        + '" data-sort="'
-        + id
-        + '"><span class="nt-name">'
-        + esc(label)
-        + '</span>'
-        + (s === id ? ic('check','tick') : '')
-        + '</button>'
-      )
-      .join('')
-  );
-});
-
-appMenuBtn.addEventListener('click', () => openMenu([
-  {
-    icon:'import',
-    label:'Import Markdown',
-    fn:() => mdImport.click()
-  },
-  {
-    icon:'export',
-    label:'Export all notes',
-    fn:exportAllNotes
-  },
-  {
-    icon:'gear',
-    label:'Settings',
-    fn:openSettings
-  }
-]));
-
-/* ---------- Content interactions ---------- */
+/* ---------- Content Interactions & Long Press ---------- */
 content.addEventListener('click', e => {
   if (Date.now() < suppressClickUntil) return;
 
-  const swipeTrash = e.target.closest('[data-swipe-trash]');
+  const card = e.target.closest('.note-card');
+  if (!card) return;
 
-  if (swipeTrash) {
-    moveNoteToTrash(
-      swipeTrash.dataset.swipeTrash,
-      true
-    );
-    return;
-  }
-
-  const addf = e.target.closest('[data-addfolder]');
-
-  if (addf) {
-    createFolder(addf.dataset.addfolder || null);
-    return;
-  }
+  const id = card.dataset.open;
+  if (!id) return;
 
   if (selMode) {
-    const op = e.target.closest('[data-open]');
-
-    if (op) {
-      toggleSelection(op.dataset.open);
-    }
-
+    toggleSelection(id);
     return;
   }
 
-  const trashNote = e.target.closest('[data-trow]');
-
-  if (trashNote) {
-    trashActionTarget = {
-      type:'note',
-      id:trashNote.dataset.trow
-    };
-
+  if (screen.type === 'trash') {
+    trashActionTarget = { type: 'note', id };
     openTrashActions();
     return;
   }
 
-  const trashFolder = e.target.closest('[data-tnb]');
-
-  if (trashFolder) {
-    trashActionTarget = {
-      type:'folder',
-      id:trashFolder.dataset.tnb
-    };
-
-    openTrashActions();
-    return;
-  }
-
-  const tag = e.target.closest('[data-tag]');
-
-  if (tag) {
-    nav({
-      type:'tag',
-      tag:tag.dataset.tag
-    });
-
-    return;
-  }
-
-  const nb = e.target.closest('[data-nb]');
-
-  if (nb) {
-    nav({
-      type:'notebook',
-      id:nb.dataset.nb
-    });
-
-    return;
-  }
-
-  const op = e.target.closest('[data-open]');
-
-  if (op) {
-    openEditor(
-      op.dataset.open,
-      false,
-      false
-    );
-  }
+  openEditor(id, false, false);
 });
 
-/* ---------- Mobile long-press / swipe on content ---------- */
-let gesture = null;
+let cardGesture = null;
 
 content.addEventListener('touchstart', e => {
-  if (
-    selMode
-    || e.touches.length !== 1
-  ) {
-    return;
-  }
+  if (selMode || e.touches.length !== 1) return;
+  const card = e.target.closest('.note-card');
+  if (!card) return;
 
-  const row = e.target.closest('.row');
+  const id = card.dataset.open;
+  if (!id) return;
 
-  if (!row) return;
-
-  const id = row.dataset.open;
-  const nb = row.dataset.nb;
-
-  if (!id && !nb) return;
-
-  gesture = {
-    row,
-    wrap:row.closest('.swipe-wrap'),
-    x:e.touches[0].clientX,
-    y:e.touches[0].clientY,
-    mode:'wait',
-    fired:false
+  cardGesture = {
+    card,
+    id,
+    x: e.touches[0].clientX,
+    y: e.touches[0].clientY,
+    fired: false
   };
 
-  gesture.timer = setTimeout(() => {
-    if (!gesture) return;
-
-    gesture.fired = true;
-
-    row.classList.remove('holding');
-
-    if (id) {
-      enterSelection(id);
-    } else if (nb) {
-      openFolderActions(
-        nb,
-        {
-          x:gesture.x,
-          y:gesture.y
-        }
-      );
-    }
-
-    if (navigator.vibrate) navigator.vibrate(20);
+  cardGesture.timer = setTimeout(() => {
+    if (!cardGesture) return;
+    cardGesture.fired = true;
+    if (navigator.vibrate) navigator.vibrate(25);
+    enterSelection(id);
   }, 480);
-
-  row.classList.add('holding');
-}, {
-  passive:true
-});
+}, { passive: true });
 
 content.addEventListener('touchmove', e => {
-  if (!gesture) return;
-
-  const t = e.touches[0];
-
-  const dx = t.clientX - gesture.x;
-  const dy = t.clientY - gesture.y;
-
-  gesture.dx = dx;
-
-  if (gesture.mode === 'wait') {
-    if (
-      Math.abs(dy) > 12
-      || dx > 12
-    ) {
-      clearTimeout(gesture.timer);
-      gesture.mode = 'dead';
-      gesture.row.classList.remove('holding');
-    }
-
-    else if (
-      dx < -12
-      && gesture.wrap
-      && !content.classList.contains('grid-view')
-    ) {
-      clearTimeout(gesture.timer);
-      gesture.mode = 'swipe';
-      gesture.row.classList.remove('holding');
-      gesture.row.classList.add('dragging');
-    }
+  if (!cardGesture) return;
+  const dx = e.touches[0].clientX - cardGesture.x;
+  const dy = e.touches[0].clientY - cardGesture.y;
+  if (Math.abs(dy) > 12 || Math.abs(dx) > 12) {
+    clearTimeout(cardGesture.timer);
+    cardGesture = null;
   }
+}, { passive: true });
 
-  if (gesture.mode === 'swipe') {
-    e.preventDefault();
-
-    gesture.row.style.transform =
-      'translateX('
-      + Math.max(
-          -76,
-          Math.min(0, dx)
-        )
-      + 'px)';
-  }
-}, {
-  passive:false
-});
-
-function finishGesture() {
-  if (!gesture) return;
-
-  clearTimeout(gesture.timer);
-
-  gesture.row.classList.remove('holding');
-
-  if (gesture.mode === 'swipe') {
-    gesture.row.classList.remove('dragging');
-    gesture.row.style.transform = '';
-
-    if (gesture.dx < -38) {
-      content
-        .querySelectorAll('.swipe-wrap.open')
-        .forEach(w => {
-          if (w !== gesture.wrap) {
-            w.classList.remove('open');
-          }
-        });
-
-      gesture.wrap.classList.add('open');
-    } else {
-      gesture.wrap.classList.remove('open');
-    }
-
-    suppressClickUntil = Date.now() + 300;
-  }
-
-  if (gesture.fired) {
-    suppressClickUntil = Date.now() + 350;
-  }
-
-  gesture = null;
+function finishCardGesture() {
+  if (!cardGesture) return;
+  clearTimeout(cardGesture.timer);
+  if (cardGesture.fired) suppressClickUntil = Date.now() + 350;
+  cardGesture = null;
 }
 
-content.addEventListener(
-  'touchend',
-  finishGesture,
-  {passive:true}
-);
+content.addEventListener('touchend', finishCardGesture, { passive: true });
+content.addEventListener('touchcancel', finishCardGesture, { passive: true });
 
-content.addEventListener(
-  'touchcancel',
-  finishGesture,
-  {passive:true}
-);
+/* ---------- Overlays & Menu Handlers ---------- */
+scrim.addEventListener('click', closeAllOverlays);
 
-/* ---------- Folder actions ---------- */
-async function createFolder(parent) {
-  if (
-    NativeFS.available
-    && !vaultReady
-  ) {
-    const ready =
-      await ensureVault();
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeAllOverlays();
+});
 
-    if (!ready) {
-      toast(
-        'Choose a notes folder first'
-      );
-      return;
-    }
-  }
+window.addEventListener('take-fast-notes-storage-error', () => {
+  setTimeout(() => {
+    toast('Storage full. Please free space and try again.');
+  }, 0);
+});
 
-  const name =
-    prompt(
-      parent
-        ? 'New subfolder name'
-        : 'New folder name',
-      ''
-    );
+menuEl.addEventListener('click', e => {
+  const item = e.target.closest('[data-mi]');
+  if (!item) return;
+  const action = menuItems[Number(item.dataset.mi)];
+  if (action?.fn) action.fn();
+  closeMenu();
+});
 
-  if (name === null) {
+/* ---------- Sheet Interactions ---------- */
+sheetContent.addEventListener('click', e => {
+  const newRoot = e.target.closest('[data-action="new-root-folder"]');
+  if (newRoot) {
+    closeSheet();
+    createFolder(null);
     return;
   }
 
-  const clean =
-    name.trim();
-
-  if (!clean) {
-    return toast(
-      'Folder name cannot be empty'
-    );
+  const nbItem = e.target.closest('[data-sheet-nb]');
+  if (nbItem) {
+    closeSheet();
+    nav({ type: 'notebook', id: nbItem.dataset.sheetNb });
+    return;
   }
 
-  if (
-    db.notebooks.some(
-      n =>
-        !n.trashed
-        && n.parent === parent
-        && n.name.toLowerCase()
-          === clean.toLowerCase()
-    )
-  ) {
-    return toast(
-      'A folder with that name already exists here'
-    );
+  const libItem = e.target.closest('[data-sheet-lib]');
+  if (libItem) {
+    closeSheet();
+    const kind = libItem.dataset.sheetLib;
+    if (kind === 'recent') nav({ type: 'notes', filter: 'recent' });
+    else if (kind === 'favorites') nav({ type: 'notes', filter: 'favorites' });
+    else if (kind === 'tags') nav({ type: 'tags' });
+    else if (kind === 'trash') nav({ type: 'trash' });
+    return;
   }
 
-  const nb = {
-    id: uid(),
-    name: clean,
-    parent: parent || null,
-    open: false
-  };
+  const tChoice = e.target.closest('[data-theme-choice]');
+  if (tChoice) {
+    db.prefs.theme = tChoice.dataset.themeChoice;
+    save();
+    applyTheme();
+    openSettings();
+    return;
+  }
 
-  const folder =
-    parent
-      ? NativeFS.folderPath(parent)
-        + '/'
-        + clean
-      : clean;
+  const aAction = e.target.closest('[data-action]');
+  if (aAction) {
+    if (aAction.dataset.action === 'export') exportAllNotes();
+    if (aAction.dataset.action === 'import') mdImport.click();
+    if (aAction.dataset.action === 'change-vault') changeNotesFolder();
+    return;
+  }
 
-  if (
-    NativeFS.available
-    && vaultReady
-  ) {
-    const success =
-      await NativeFS.createFolder(
-        folder
-      );
+  const sort = e.target.closest('[data-sort]');
+  if (sort) {
+    db.prefs.sortBy = sort.dataset.sort;
+    save();
+    closeSheet();
+    renderScreen();
+    return;
+  }
 
-    if (!success) {
-      toast(
-        'Could not create folder'
-      );
+  const nt = e.target.closest('[data-nt]');
+  if (nt && editing) {
+    const n = byId(editing);
+    if (n) {
+      n.color = nt.dataset.nt;
+      save();
+      applyNoteTheme(n);
+      closeSheet();
+    }
+    return;
+  }
+
+  const trRestore = e.target.closest('[data-tr-restore]');
+  if (trRestore && trashActionTarget) {
+    restoreTrash(trashActionTarget);
+    closeSheet();
+    return;
+  }
+
+  const trDelete = e.target.closest('[data-tr-delete]');
+  if (trDelete && trashActionTarget) {
+    deleteForever(trashActionTarget);
+    closeSheet();
+    return;
+  }
+});
+
+/* ---------- Folder Actions ---------- */
+async function createFolder(parent) {
+  if (NativeFS.available && !vaultReady) {
+    const ready = await ensureVault();
+    if (!ready) {
+      toast('Choose a notes folder first');
       return;
     }
   }
 
-  db.notebooks.push(nb);
+  const name = prompt(parent ? 'New subfolder name' : 'New folder name', '');
+  if (name === null) return;
+  const clean = name.trim();
+  if (!clean) return toast('Folder name cannot be empty');
 
-  if (parent) {
-    const p =
-      byNb(parent);
-
-    if (p) {
-      p.open = true;
-    }
+  if (db.notebooks.some(n => !n.trashed && n.parent === parent && n.name.toLowerCase() === clean.toLowerCase())) {
+    return toast('A folder with that name already exists');
   }
 
+  const nb = { id: uid(), name: clean, parent: parent || null, open: false };
+  db.notebooks.push(nb);
   save();
   renderScreen();
-
   toast('Folder created');
 }
 
-function openFolderActions(id, pos = null) {
-  folderActionTarget = id;
-
-  const nb = byNb(id);
-
-  if (!nb) return;
-
-  openMenu([
-    {
-      icon:'tag',
-      label:'Rename',
-      fn:() => renameFolder(id)
-    },
-    {
-      icon:'folder',
-      label:'Move folder',
-      fn:() => moveFolder(id)
-    },
-    {
-      icon:'trash',
-      label:'Move to Trash',
-      danger:true,
-      fn:() => trashFolder(id)
-    }
-  ], '', pos);
-}
-
-function renameFolder(id) {
-  const nb = byNb(id);
-
-  if (!nb) return;
-
-  const name = prompt(
-    'Rename folder',
-    nb.name
-  );
-
-  if (name === null) return;
-
-  const clean = name.trim();
-
-  if (!clean) {
-    return toast(
-      'Folder name cannot be empty'
-    );
-  }
-
-  if (
-    db.notebooks.some(
-      n =>
-        n.id !== id
-        && !n.trashed
-        && n.parent === nb.parent
-        && n.name.toLowerCase() === clean.toLowerCase()
-    )
-  ) {
-    return toast(
-      'A folder with that name already exists here'
-    );
-  }
-
-  nb.name = clean;
-
-  save();
-  renderScreen();
-
-  toast('Folder renamed');
-}
-
-function moveFolder(id) {
-  const nb = byNb(id);
-
-  if (!nb) return;
-
-  const candidates =
-    db.notebooks.filter(
-      n =>
-        !n.trashed
-        && n.id !== id
-        && !descSet(id).has(n.id)
-    );
-
-  const choices = [
-    '(Root)',
-    ...candidates.map(n => n.name)
-  ];
-
-  const answer = prompt(
-    'Move folder to:\n\n'
-    + choices
-      .map((x,i) => i + '. ' + x)
-      .join('\n'),
-    '0'
-  );
-
-  if (answer === null) return;
-
-  const index = Number(answer);
-
-  if (
-    !Number.isInteger(index)
-    || index < 0
-    || index >= choices.length
-  ) {
-    return toast('Invalid folder choice');
-  }
-
-  nb.parent =
-    index === 0
-      ? null
-      : candidates[index - 1].id;
-
-  save();
-  renderScreen();
-
-  toast('Folder moved');
-}
-
-function trashFolder(id) {
-  const ids = descSet(id);
-  const stamp = Date.now();
-
-  db.notebooks.forEach(nb => {
-    if (
-      ids.has(nb.id)
-      && !nb.trashed
-    ) {
-      nb.trashed = stamp;
-      nb.trashedBy = id;
-    }
-  });
-
-  db.notes.forEach(n => {
-    if (
-      ids.has(n.nb)
-      && !n.trashed
-    ) {
-      n.trashed = stamp;
-      n.trashedBy = id;
-    }
-  });
-
-  save();
-
-  if (
-    screen.type === 'notebook'
-    && ids.has(screen.id)
-  ) {
-    nav({
-      type:'notes',
-      filter:'all'
-    });
-  } else {
-    renderScreen();
-  }
-
-  toast('Folder moved to Trash');
-}
-
-/* ---------- Trash ---------- */
+/* ---------- Trash Operations ---------- */
 function moveNoteToTrash(id, notify = true) {
   const n = byId(id);
-
   if (!n) return;
-
   n.trashed = Date.now();
   n.trashedBy = null;
-
   save();
-
-  if (editing === id) {
-    closeEditor();
-  }
-
+  if (editing === id) closeEditor();
   if (notify) {
     renderScreen();
     toast('Note moved to Trash');
@@ -812,172 +301,48 @@ function moveNoteToTrash(id, notify = true) {
 
 function openTrashActions() {
   if (!trashActionTarget) return;
-
-  const isNote =
-    trashActionTarget.type === 'note';
-
   openSheet(
-    'Trash',
-    (isNote
-      ? '<button class="sheet-item" data-tr-view>View</button>'
-      : '')
-    + '<button class="sheet-item" data-tr-restore>Restore</button>'
-    + '<button class="sheet-item danger" data-tr-delete>Delete forever</button>'
+    'Trash Note',
+    '<button class="sheet-item" data-tr-restore>' + ic('check') + '<span class="nt-name">Restore</span></button>'
+    + '<button class="sheet-item danger" data-tr-delete>' + ic('trash') + '<span class="nt-name">Delete Forever</span></button>'
   );
 }
 
 function restoreTrash(target) {
   if (target.type === 'note') {
     const n = byId(target.id);
-
     if (n) {
       n.trashed = 0;
       delete n.trashedBy;
       save();
     }
   }
-
-  else {
-    const nb = byNb(target.id);
-
-    if (nb) {
-      const legacyTrash =
-        nb.trashedBy === undefined;
-
-      const ids = new Set([nb.id]);
-
-      if (legacyTrash) {
-        (function walk(p) {
-          db.notebooks
-            .filter(
-              x =>
-                x.trashed
-                && x.parent === p
-            )
-            .forEach(x => {
-              ids.add(x.id);
-              walk(x.id);
-            });
-        })(nb.id);
-      }
-
-      else {
-        db.notebooks.forEach(x => {
-          if (x.trashedBy === nb.id) {
-            ids.add(x.id);
-          }
-        });
-      }
-
-      db.notebooks.forEach(x => {
-        if (ids.has(x.id)) {
-          x.trashed = 0;
-          delete x.trashedBy;
-        }
-      });
-
-      db.notes.forEach(n => {
-        if (
-          (legacyTrash && ids.has(n.nb))
-          || n.trashedBy === nb.id
-        ) {
-          n.trashed = 0;
-          delete n.trashedBy;
-        }
-      });
-
-      save();
-    }
-  }
-
   trashActionTarget = null;
-
   renderScreen();
-
   toast('Restored');
 }
 
 function deleteForever(target) {
   if (target.type === 'note') {
-    db.notes =
-      db.notes.filter(
-        n => n.id !== target.id
-      );
+    db.notes = db.notes.filter(n => n.id !== target.id);
   }
-
-  else {
-    const root = byNb(target.id);
-
-    const legacyTrash =
-      root?.trashedBy === undefined;
-
-    const ids = new Set([target.id]);
-
-    if (legacyTrash) {
-      (function walk(p) {
-        db.notebooks
-          .filter(
-            x =>
-              x.trashed
-              && x.parent === p
-          )
-          .forEach(x => {
-            ids.add(x.id);
-            walk(x.id);
-          });
-      })(target.id);
-    }
-
-    else {
-      db.notebooks.forEach(x => {
-        if (x.trashedBy === target.id) {
-          ids.add(x.id);
-        }
-      });
-    }
-
-    db.notes =
-      db.notes.filter(
-        n =>
-          legacyTrash
-            ? !ids.has(n.nb)
-            : n.trashedBy !== target.id
-      );
-
-    db.notebooks =
-      db.notebooks.filter(
-        n => !ids.has(n.id)
-      );
-  }
-
   save();
-
   trashActionTarget = null;
-
   renderScreen();
-
   toast('Deleted permanently');
 }
 
-/* ---------- Editor ---------- */
+/* ---------- Editor Workflow ---------- */
 function applyNoteTheme(n) {
-  editorScroll.className =
-    'editor-scroll bg-'
-    + (n.color || 'white');
+  editorScroll.className = 'editor-scroll bg-' + (n.color || 'white');
 }
 
-function openEditor(
-  id,
-  focusTitle = false,
-  readonly = false
-) {
+function openEditor(id, focusTitle = false, readonly = false) {
   const n = byId(id);
-
   if (!n) return;
 
   editing = id;
   editingReadonly = !!readonly;
-
   n.viewed = Date.now();
   save();
 
@@ -985,135 +350,65 @@ function openEditor(
   bodyInput.innerHTML = n.body || '';
 
   titleInput.disabled = editingReadonly;
-
-  bodyInput.contentEditable =
-    editingReadonly
-      ? 'false'
-      : 'true';
+  bodyInput.contentEditable = editingReadonly ? 'false' : 'true';
 
   fmtbar.hidden = editingReadonly;
   editMenuBtn.hidden = editingReadonly;
-
-  editTitleBar.textContent =
-    titleInput.value.trim()
-      || 'Untitled';
-
-  setSave(
-    editingReadonly
-      ? 'In Trash'
-      : 'Saved'
-  );
+  editTitleBar.textContent = titleInput.value.trim() || 'Untitled';
+  setSave(editingReadonly ? 'In Trash' : 'Saved');
 
   applyNoteTheme(n);
-
-  document.documentElement.style.setProperty(
-    '--editor-zoom',
-    (n.zoom || 100) / 100
-  );
+  document.documentElement.style.setProperty('--editor-zoom', (n.zoom || 100) / 100);
 
   homeView.hidden = true;
   editView.hidden = false;
-
   closeAllOverlays();
 
-  checkFormatStates();
-
   if (!editingReadonly) {
-    const target =
-      focusTitle
-        ? titleInput
-        : bodyInput;
-
-    requestAnimationFrame(() => {
-      target.focus({
-        preventScroll:true
-      });
-    });
+    const target = focusTitle ? titleInput : bodyInput;
+    requestAnimationFrame(() => target.focus({ preventScroll: true }));
   }
 }
 
 function closeEditor() {
   clearTimeout(saveTimer);
-
   commit();
-
   editView.hidden = true;
   homeView.hidden = false;
-
   editing = null;
   editingReadonly = false;
-
-  document.documentElement.style.setProperty(
-    '--editor-zoom',
-    '1'
-  );
-
+  document.documentElement.style.setProperty('--editor-zoom', '1');
   renderScreen();
 }
 
 function setSave(text) {
   saveState.textContent = text;
-
-  saveState.classList.toggle(
-    'saving',
-    text !== 'Saved'
-    && text !== 'In Trash'
-  );
+  saveState.classList.toggle('saving', text !== 'Saved' && text !== 'In Trash');
 }
 
 async function commit() {
-  if (
-    !editing
-    || editingReadonly
-  ) {
-    return;
-  }
+  if (!editing || editingReadonly) return;
+  const n = byId(editing);
+  if (!n) return;
 
-  const n =
-    byId(editing);
-
-  if (!n) {
-    return;
-  }
-
-  const title =
-    titleInput.value.trim();
-
-  const body =
-    sanitize(
-      bodyInput.innerHTML
-    );
-
-  const changed =
-    n.title !== title
-    || n.body !== body;
+  const title = titleInput.value.trim();
+  const body = sanitize(bodyInput.innerHTML);
+  const changed = n.title !== title || n.body !== body;
 
   n.title = title;
   n.body = body;
-
-  if (changed) {
-    n.updated =
-      Date.now();
-  }
+  if (changed) n.updated = Date.now();
 
   if (!save()) {
     setSave('Storage full');
     return;
   }
 
-  if (
-    NativeFS.available
-    && vaultReady
-    && changed
-  ) {
-    const success =
-      await writeNoteToVault(n);
-
+  if (NativeFS.available && vaultReady && changed) {
+    const success = await writeNoteToVault(n);
     if (!success) {
       setSave('File could not be saved');
-      toast(
-        'Could not save Markdown file'
-      );
+      toast('Could not save Markdown file');
       return;
     }
   }
@@ -1123,1767 +418,190 @@ async function commit() {
 
 function scheduleSave() {
   setSave('Saving…');
-
   clearTimeout(saveTimer);
-
-  saveTimer =
-    setTimeout(commit, 450);
+  saveTimer = setTimeout(commit, 450);
 }
 
-backBtn.addEventListener(
-  'click',
-  () => {
-    commit();
-    closeEditor();
-  }
-);
+backBtn.addEventListener('click', () => {
+  commit();
+  closeEditor();
+});
 
-titleInput.addEventListener(
-  'input',
-  () => {
-    editTitleBar.textContent =
-      titleInput.value.trim()
-      || 'Untitled';
-
-    scheduleSave();
-  }
-);
-
-bodyInput.addEventListener(
-  'input',
-  () => {
-    scheduleSave();
-    checkFormatStates();
-  }
-);
-
-window.addEventListener(
-  'pagehide',
-  commit
-);
-
-document.addEventListener(
-  'visibilitychange',
-  () => {
-    if (document.visibilityState === 'hidden') {
-      commit();
-    }
-  }
-);
-
-bodyInput.addEventListener(
-  'click',
-  e => {
-    const cb =
-      e.target.closest('.cb');
-
-    if (!cb || editingReadonly) {
-      return;
-    }
-
-    const li = cb.closest('li');
-
-    if (!li) return;
-
-    li.classList.toggle(
-      'done'
-    );
-
-    scheduleSave();
-  }
-);
-
-function checkFormatStates() {
-  if (!editing || editingReadonly) {
-    return;
-  }
-
-  const commands = [
-    ['bold','bold'],
-    ['italic','italic'],
-    ['underline','underline'],
-    ['insertUnorderedList','ul'],
-    ['insertOrderedList','ol']
-  ];
-
-  commands.forEach(
-    ([cmd,key]) => {
-      const btn =
-        $(`.fmt-btn[data-cmd="${key}"]`);
-
-      if (!btn) return;
-
-      let active = false;
-
-      try {
-        active =
-          document.queryCommandState(cmd);
-      } catch {}
-
-      btn.classList.toggle(
-        'active',
-        active
-      );
-    }
-  );
-
-  const h =
-    $('.fmt-btn[data-cmd="heading"]');
-
-  if (h) {
-    let value = '';
-
-    try {
-      value =
-        (
-          document.queryCommandValue(
-            'formatBlock'
-          ) || ''
-        ).toUpperCase();
-    } catch {}
-
-    h.classList.toggle(
-      'active',
-      /^H[1-4]$/.test(value)
-    );
-  }
-}
-
-document.addEventListener(
-  'selectionchange',
-  checkFormatStates
-);
-
-function execFormat(
-  name,
-  value = null
-) {
-  bodyInput.focus();
-
-  try {
-    document.execCommand(
-      name,
-      false,
-      value
-    );
-  } catch (e) {
-    return;
-  }
-
+titleInput.addEventListener('input', () => {
+  editTitleBar.textContent = titleInput.value.trim() || 'Untitled';
   scheduleSave();
-  checkFormatStates();
-}
+});
 
-fmtbar.addEventListener(
-  'click',
-  e => {
-    const b =
-      e.target.closest('.fmt-btn');
+bodyInput.addEventListener('input', () => {
+  scheduleSave();
+});
 
-    if (!b || editingReadonly) {
-      return;
-    }
+bodyInput.addEventListener('click', e => {
+  const cb = e.target.closest('.cb');
+  if (!cb || editingReadonly) return;
+  const li = cb.closest('li');
+  if (!li) return;
+  li.classList.toggle('done');
+  scheduleSave();
+});
 
-    const c = b.dataset.cmd;
+/* Formatting Toolbar Execution */
+fmtbar.addEventListener('click', e => {
+  const b = e.target.closest('.fmt-btn');
+  if (!b || editingReadonly) return;
+  const c = b.dataset.cmd;
 
-    if (
-      c === 'bold'
-      || c === 'italic'
-      || c === 'underline'
-    ) {
-      execFormat(c);
-    }
-
-    else if (c === 'ul') {
-      execFormat(
-        'insertUnorderedList'
-      );
-    }
-
-    else if (c === 'ol') {
-      execFormat(
-        'insertOrderedList'
-      );
-    }
-
-    else if (c === 'heading') {
-      let v = '';
-
-      try {
-        v =
-          (
-            document.queryCommandValue(
-              'formatBlock'
-            ) || ''
-          ).toLowerCase();
-      } catch {}
-
-      execFormat(
-        'formatBlock',
-        v === 'h2'
-          ? 'h3'
-          : v === 'h3'
-            ? 'p'
-            : 'h2'
-      );
-    }
-
-    else if (c === 'check') {
-      execFormat(
-        'insertHTML',
-        '<ul class="cl"><li>'
-        + '<span class="cb" contenteditable="false"></span>'
-        + '&#8203;</li></ul><p><br></p>'
-      );
-    }
-
-    else if (c === 'link') {
-      const url =
-        prompt(
-          'Link URL',
-          'https://'
-        );
-
-      if (
-        url
-        && /^(https?:\/\/|mailto:)/i.test(
-          url.trim()
-        )
-      ) {
-        execFormat(
-          'createLink',
-          url.trim()
-        );
-      }
-
-      else if (url) {
-        toast(
-          'Use a valid http(s) or mailto link'
-        );
-      }
-    }
-
-    else if (c === 'more') {
-      openMoreFormatting();
+  bodyInput.focus();
+  if (c === 'bold' || c === 'italic' || c === 'underline') {
+    document.execCommand(c, false, null);
+  } else if (c === 'ul') {
+    document.execCommand('insertUnorderedList', false, null);
+  } else if (c === 'ol') {
+    document.execCommand('insertOrderedList', false, null);
+  } else if (c === 'heading') {
+    document.execCommand('formatBlock', false, 'h2');
+  } else if (c === 'check') {
+    document.execCommand('insertHTML', false, '<ul class="cl"><li><span class="cb" contenteditable="false"></span>&#8203;</li></ul><p><br></p>');
+  } else if (c === 'link') {
+    const url = prompt('Link URL', 'https://');
+    if (url && /^(https?:\/\/|mailto:)/i.test(url.trim())) {
+      document.execCommand('createLink', false, url.trim());
     }
   }
-);
+  scheduleSave();
+});
 
-function openMoreFormatting() {
-  openSheet(
-    'More formatting',
-    '<button class="sheet-item" data-format="quote">Blockquote</button>'
-    + '<button class="sheet-item" data-format="code">Code block</button>'
-    + '<button class="sheet-item" data-format="clear">Clear formatting</button>'
-  );
-}
+/* Editor kebab menu */
+editMenuBtn.addEventListener('click', () => {
+  const n = byId(editing);
+  if (!n) return;
 
-/* ---------- Note menus ---------- */
-editMenuBtn.addEventListener(
-  'click',
-  () => {
-    const n = byId(editing);
-
-    if (!n) return;
-
-    openMenu([
-      {
-        icon:'sun',
-        label:'Note color',
-        fn:() =>
-          openSheet(
-            'Note color',
-            COLORS
-              .map(
-                c =>
-                  '<button class="sheet-item color-choice'
-                  + (n.color === c.id ? ' on' : '')
-                  + '" data-nt="'
-                  + c.id
-                  + '"><span class="swatch sw-'
-                  + c.id
-                  + '"></span><span class="nt-name">'
-                  + esc(c.name)
-                  + '</span>'
-                  + (
-                    n.color === c.id
-                      ? ic('check','tick')
-                      : ''
-                  )
-                  + '</button>'
-              )
-              .join('')
-          )
-      },
-
-      {
-        icon:'tag',
-        label:'Edit tags',
-        fn:() => editTags(n)
-      },
-
-      {
-        icon:'heading',
-        label:'Text size',
-        fn:() => openTextSize(n)
-      },
-
-      {
-        icon:'star',
-        label:
-          n.fav
-            ? 'Remove favorite'
-            : 'Add to favorites',
-        fn:() => {
-          n.fav = !n.fav;
-          save();
-
-          toast(
-            n.fav
-              ? 'Added to favorites'
-              : 'Removed from favorites'
-          );
-        }
-      },
-
-      {
-        icon:'pin',
-        label:
-          n.pinned
-            ? 'Unpin note'
-            : 'Pin note',
-        fn:() => {
-          n.pinned = !n.pinned;
-          save();
-
-          toast(
-            n.pinned
-              ? 'Pinned'
-              : 'Unpinned'
-          );
-        }
-      },
-
-      {
-        icon:'trash',
-        label:'Move to Trash',
-        danger:true,
-        fn:() => {
-          moveNoteToTrash(
-            n.id,
-            true
-          );
-        }
-      }
-    ]);
-  }
-);
-
-function editTags(note) {
-  const value =
-    prompt(
-      'Tags (separate with commas)',
-      (note.tags || []).join(', ')
-    );
-
-  if (value === null) return;
-
-  note.tags =
-    normalizeTags(value);
-
-  save();
-  renderScreen();
-
-  toast(
-    note.tags.length
-      ? 'Tags updated'
-      : 'Tags cleared'
-  );
-}
-
-function openTextSize(note) {
-  openSheet(
-    'Text size',
-    ZOOMS
-      .map(
-        zoom =>
-          '<button class="sheet-item'
-          + (
-            note.zoom === zoom
-              ? ' on'
-              : ''
-          )
-          + '" data-zoom="'
-          + zoom
-          + '"><span class="nt-name">'
-          + (
-            zoom === 100
-              ? 'Default'
-              : zoom + '%'
-          )
-          + '</span>'
-          + (
-            note.zoom === zoom
-              ? ic('check','tick')
-              : ''
-          )
-          + '</button>'
-      )
-      .join('')
-  );
-}
-
-/* ---------- Sheets ---------- */
-sheetContent.addEventListener(
-  'click',
-  e => {
-    const t =
-      e.target.closest(
-        '[data-theme-choice]'
-      );
-
-    if (t) {
-      db.prefs.theme =
-        t.dataset.themeChoice;
-
-      save();
-      applyTheme();
-      openSettings();
-
-      return;
-    }
-
-    const a =
-      e.target.closest('[data-action]');
-
-    if (a) {
-      if (a.dataset.action === 'export') {
-        exportAllNotes();
-      }
-
-      if (a.dataset.action === 'import') {
-        mdImport.click();
-      }
-      if (
-  a.dataset.action === 'change-vault'
-) {
-  changeNotesFolder();
-      }
-
-      return;
-    }
-
-    const sort =
-      e.target.closest('[data-sort]');
-
-    if (sort) {
-      db.prefs.sortBy =
-        sort.dataset.sort;
-
-      save();
-      closeSheet();
-      renderScreen();
-
-      return;
-    }
-
-    const nt =
-      e.target.closest('[data-nt]');
-
-    if (nt && editing) {
-      const n = byId(editing);
-
-      if (n) {
-        n.color =
-          nt.dataset.nt;
-
+  openMenu([
+    {
+      icon: 'star',
+      label: n.fav ? 'Remove favorite' : 'Add to favorites',
+      fn: () => {
+        n.fav = !n.fav;
         save();
-        applyNoteTheme(n);
-        closeSheet();
+        toast(n.fav ? 'Added to favorites' : 'Removed from favorites');
       }
-
-      return;
-    }
-
-    const startPlace =
-      e.target.closest(
-        '[data-start-place]'
-      );
-
-    if (startPlace) {
-      db.prefs.startPlace =
-        startPlace.dataset.startPlace === 'newNote'
-          ? 'newNote'
-          : 'home';
-
-      save();
-      openSettings();
-
-      return;
-    }
-
-    const zoom =
-      e.target.closest('[data-zoom]');
-
-    if (zoom && editing) {
-      const n = byId(editing);
-
-      if (n) {
-        n.zoom =
-          Number(zoom.dataset.zoom);
-
+    },
+    {
+      icon: 'pin',
+      label: n.pinned ? 'Unpin note' : 'Pin note',
+      fn: () => {
+        n.pinned = !n.pinned;
         save();
-
-        document.documentElement.style.setProperty(
-          '--editor-zoom',
-          n.zoom / 100
-        );
-
-        closeSheet();
+        toast(n.pinned ? 'Pinned' : 'Unpinned');
       }
-
-      return;
+    },
+    {
+      icon: 'trash',
+      label: 'Move to Trash',
+      danger: true,
+      fn: () => moveNoteToTrash(n.id, true)
     }
+  ]);
+});
 
-    const fo =
-      e.target.closest('[data-fo]');
-
-    if (fo && folderActionTarget) {
-      const id =
-        folderActionTarget;
-
-      closeSheet();
-
-      if (fo.dataset.fo === 'rename') {
-        renameFolder(id);
-      }
-
-      if (fo.dataset.fo === 'move') {
-        moveFolder(id);
-      }
-
-      if (fo.dataset.fo === 'delete') {
-        trashFolder(id);
-      }
-
-      folderActionTarget = null;
-
-      return;
-    }
-
-    if (
-      e.target.closest(
-        '[data-tr-restore]'
-      )
-      && trashActionTarget
-    ) {
-      const t =
-        trashActionTarget;
-
-      closeSheet();
-      restoreTrash(t);
-
-      return;
-    }
-
-    if (
-      e.target.closest(
-        '[data-tr-delete]'
-      )
-      && trashActionTarget
-    ) {
-      const t =
-        trashActionTarget;
-
-      closeSheet();
-      deleteForever(t);
-
-      return;
-    }
-
-    if (
-      e.target.closest(
-        '[data-tr-view]'
-      )
-      && trashActionTarget?.type === 'note'
-    ) {
-      const t =
-        trashActionTarget;
-
-      trashActionTarget = null;
-
-      closeSheet();
-
-      openEditor(
-        t.id,
-        false,
-        true
-      );
-
-      return;
-    }
-
-    const format =
-      e.target.closest('[data-format]');
-
-    if (format) {
-      closeSheet();
-
-      if (
-        format.dataset.format === 'quote'
-      ) {
-        execFormat(
-          'formatBlock',
-          'blockquote'
-        );
-      }
-
-      else if (
-        format.dataset.format === 'code'
-      ) {
-        execFormat(
-          'formatBlock',
-          'pre'
-        );
-      }
-
-      else if (
-        format.dataset.format === 'clear'
-      ) {
-        execFormat(
-          'removeFormat'
-        );
-      }
-    }
-  }
-);
-
-/* ---------- Create / import / export ---------- */
-
-async function changeNotesFolder() {
-  if (!NativeFS.available) {
-    toast(
-      'Folder selection is only available in the Android app'
-    );
-
-    return;
-  }
-
-  const confirmed =
-    confirm(
-      'Choose a new location for Take Fast Notes.\n\n'
-      + 'Your current notes folder will not be moved, deleted, or changed.'
-    );
-
-  if (!confirmed) {
-    return;
-  }
-
-  const result =
-    await NativeFS.chooseFolder();
-
-  if (!result?.success) {
-    toast(
-      result?.cancelled
-        ? 'Folder selection cancelled'
-        : 'Could not change notes folder'
-    );
-
-    return;
-  }
-
-  vaultReady = false;
-
-  await syncVaultToDb();
-
-  vaultReady = true;
-
-  nav({
-    type: 'notes',
-    filter: 'all'
-  });
-
-  toast(
-    'Notes folder changed'
-  );
-}
-
+/* ---------- Note Creation ---------- */
 async function createNote() {
-  if (
-    NativeFS.available
-    && !vaultReady
-  ) {
-    const ready =
-      await ensureVault();
-
+  if (NativeFS.available && !vaultReady) {
+    const ready = await ensureVault();
     if (!ready) {
-      toast(
-        'Choose a notes folder first'
-      );
+      toast('Choose a notes folder first');
       return;
     }
   }
 
-  const now =
-    Date.now();
-
+  const now = Date.now();
   const note = {
     id: uid(),
-
     title: '',
-
-    body: '',
-
+    body: currentTab === 'tasks' ? '<ul class="cl"><li><span class="cb" contenteditable="false"></span>&nbsp;</li></ul>' : '',
     created: now,
     updated: now,
     viewed: now,
-
     pinned: false,
     fav: false,
-
-    nb:
-      screen.type === 'notebook'
-        ? screen.id
-        : null,
-
-    tags:
-      screen.type === 'tag'
-        ? [screen.tag]
-        : [],
-
+    nb: screen.type === 'notebook' ? screen.id : null,
+    tags: screen.type === 'tag' ? [screen.tag] : [],
     color: 'white',
     zoom: 100
   };
 
   db.notes.push(note);
-
-  if (
-    NativeFS.available
-    && vaultReady
-  ) {
-    const success =
-      await writeNoteToVault(
-        note
-      );
-
-    if (!success) {
-      db.notes =
-        db.notes.filter(
-          n => n.id !== note.id
-        );
-
-      toast(
-        'Could not create Markdown file'
-      );
-
-      return;
-    }
+  if (NativeFS.available && vaultReady) {
+    await writeNoteToVault(note);
   }
 
   save();
-
-  openEditor(
-    note.id,
-    true,
-    false
-  );
+  openEditor(note.id, true, false);
 }
 
-fab.addEventListener(
-  'click',
-  createNote
-);
+fab.addEventListener('click', createNote);
 
-mdImport.addEventListener(
-  'change',
-  async () => {
-    const files =
-      Array.from(
-        mdImport.files || []
-      );
-
-    if (!files.length) return;
-
-    let count = 0;
-    let failed = 0;
-
-    for (const file of files) {
-      try {
-        const text =
-          await file.text();
-
-        if (
-          file.name
-            .toLowerCase()
-            .endsWith('.json')
-        ) {
-          count +=
-            importBackup(
-              JSON.parse(text)
-            );
-        }
-
-        else {
-          const note = {
-            id:uid(),
-            title:
-              file.name.replace(
-                /\.md$/i,
-                ''
-              ),
-            body:'',
-            created:Date.now(),
-            updated:Date.now(),
-            viewed:Date.now(),
-            pinned:false,
-            fav:false,
-            nb:
-              screen.type === 'notebook'
-                ? screen.id
-                : null,
-            tags:[],
-            color:'white',
-            zoom:100
-          };
-
-          applyMd(
-            note,
-            text
-          );
-
-          if (!note.title) {
-            note.title =
-              file.name.replace(
-                /\.md$/i,
-                ''
-              )
-              || 'Untitled';
-          }
-
-          db.notes.push(note);
-
-          count++;
-        }
-      }
-
-      catch {
-        failed++;
-      }
-    }
-
-    save();
-
-    mdImport.value = '';
-
-    renderScreen();
-
-    toast(
-      countLabel(
-        count,
-        'item'
-      )
-      + ' imported'
-      + (
-        failed
-          ? '; '
-            + countLabel(
-                failed,
-                'file'
-              )
-            + ' could not be read'
-          : ''
-      )
-    );
-  }
-);
-
-function importBackup(payload) {
-  const isBackup =
-    payload
-    && payload.format === 'take-fast-notes-backup'
-    && Array.isArray(payload.notes)
-    && Array.isArray(payload.notebooks);
-
-  const isLegacy =
-    Array.isArray(payload);
-
-  if (!isBackup && !isLegacy) {
-    throw new Error(
-      'Unsupported backup'
-    );
-  }
-
-  const sourceNotes =
-    isBackup
-      ? payload.notes
-      : payload;
-
-  const sourceFolders =
-    isBackup
-      ? payload.notebooks
-      : [];
-
-  const folderMap =
-    new Map();
-
-  const importedFolders = [];
-
-  sourceFolders.forEach(
-    (folder,index) => {
-      if (
-        !folder
-        || typeof folder.name !== 'string'
-      ) {
-        return;
-      }
-
-      const oldId =
-        String(
-          folder.id
-          ?? 'folder-' + index
-        );
-
-      const id = uid();
-
-      folderMap.set(
-        oldId,
-        id
-      );
-
-      importedFolders.push({
-        id,
-        name:
-          folder.name.trim()
-          || 'Untitled folder',
-        parent:
-          folder.parent,
-        open:false
-      });
-    }
-  );
-
-  const legacyFolders =
-    new Map();
-
-  if (isLegacy) {
-    sourceNotes.forEach(
-      note => {
-        const name =
-          String(
-            note?.folder || ''
-          ).trim();
-
-        if (
-          name
-          && !legacyFolders.has(name)
-        ) {
-          const id = uid();
-
-          legacyFolders.set(
-            name,
-            id
-          );
-
-          importedFolders.push({
-            id,
-            name,
-            parent:null,
-            open:false
-          });
-        }
-      }
-    );
-  }
-
-  importedFolders.forEach(
-    folder => {
-      if (isBackup) {
-        folder.parent =
-          folderMap.get(
-            String(folder.parent)
-          )
-          || null;
-      }
-
-      db.notebooks.push(folder);
-    }
-  );
-
-  let imported = 0;
-
-  sourceNotes.forEach(
-    source => {
-      if (
-        !source
-        || typeof source !== 'object'
-      ) {
-        return;
-      }
-
-      const now = Date.now();
-
-      const created =
-        Number(source.created)
-        || now;
-
-      const updated =
-        Number(source.updated)
-        || created;
-
-      const color =
-        COLORS.some(
-          item =>
-            item.id === source.color
-        )
-          ? source.color
-          : 'white';
-
-      const zoom =
-        ZOOMS.includes(
-          Number(source.zoom)
-        )
-          ? Number(source.zoom)
-          : 100;
-
-      db.notes.push({
-        id:uid(),
-        title:
-          String(
-            source.title || ''
-          ),
-        body:
-          source.body !== undefined
-            ? sanitize(
-                String(source.body)
-              )
-            : mdToHtml(
-                source.markdown || ''
-              ),
-        created,
-        updated,
-        viewed:
-          Number(source.viewed)
-          || updated,
-        pinned:
-          !!source.pinned,
-        fav:
-          !!source.fav,
-        nb:
-          isBackup
-            ? folderMap.get(
-                String(source.nb)
-              ) || null
-            : legacyFolders.get(
-                String(
-                  source.folder || ''
-                ).trim()
-              ) || null,
-        tags:
-          normalizeTags(
-            source.tags
-          ),
-        color,
-        zoom
-      });
-
-      imported++;
-    }
-  );
-
-  return imported;
-}
-
-function downloadBlob(
-  name,
-  contentText,
-  type = 'text/plain'
-) {
-  const blob =
-    new Blob(
-      [contentText],
-      {type}
-    );
-
-  const url =
-    URL.createObjectURL(blob);
-
-  const a =
-    document.createElement('a');
-
-  a.href = url;
-  a.download = name;
-
-  document.body.appendChild(a);
-
-  a.click();
-
-  a.remove();
-
-  setTimeout(
-    () =>
-      URL.revokeObjectURL(url),
-    1000
-  );
-}
-
-function exportAllNotes() {
-  const payload = {
-    format:
-      'take-fast-notes-backup',
-
-    version:1,
-
-    exportedAt:
-      new Date().toISOString(),
-
-    notebooks:
-      db.notebooks
-        .filter(n => !n.trashed)
-        .map(
-          n => ({
-            id:n.id,
-            name:n.name,
-            parent:n.parent || null
-          })
-        ),
-
-    notes:
-      db.notes
-        .filter(n => !n.trashed)
-        .map(
-          n => ({
-            id:n.id,
-            title:n.title,
-            body:n.body,
-            created:n.created,
-            updated:n.updated,
-            viewed:n.viewed,
-            pinned:!!n.pinned,
-            fav:!!n.fav,
-            nb:n.nb || null,
-            tags:
-              normalizeTags(
-                n.tags
-              ),
-            color:
-              n.color || 'white',
-            zoom:
-              n.zoom || 100
-          })
-        )
-  };
-
-  downloadBlob(
-    'take-fast-notes-export-'
-      + new Date()
-          .toISOString()
-          .slice(0,10)
-      + '.json',
-    JSON.stringify(
-      payload,
-      null,
-      2
-    ),
-    'application/json'
-  );
-
-  toast('Export started');
-}
-
-/* ---------- Settings ---------- */
+/* ---------- Settings Sheet ---------- */
 function openSettings() {
-  const theme =
-    db.prefs.theme
-    || 'light';
-
-  const startPlace =
-    db.prefs.startPlace === 'newNote'
-      ? 'newNote'
-      : 'home';
-
   openSheet(
     'Settings',
-
-    '<div class="settings-group">'
-    + '<div class="settings-label">Theme</div>'
-    + '<div class="seg">'
-    + [
-        'light',
-        'dark',
-        'system'
-      ]
-      .map(
-        t =>
-          '<button class="'
-          + (
-            theme === t
-              ? 'on'
-              : ''
-          )
-          + '" type="button" data-theme-choice="'
-          + t
-          + '">'
-          + t[0].toUpperCase()
-          + t.slice(1)
-          + '</button>'
-      )
-      .join('')
-    + '</div>'
-    + '</div>'
-
-    + '<div class="settings-group">'
-    + '<div class="settings-label">Default start place</div>'
-
-    + '<div class="settings-choice">'
-
-    + '<button class="setting-choice'
-    + (
-      startPlace === 'home'
-        ? ' on'
-        : ''
-    )
-    + '" type="button" data-start-place="home">'
-
-    + '<span>'
-    + '<strong>Home screen</strong>'
-    + '<small>Open the normal notes screen when the app starts.</small>'
-    + '</span>'
-
-    + (
-      startPlace === 'home'
-        ? ic('check','tick')
-        : ''
-    )
-
-    + '</button>'
-
-    + '<button class="setting-choice'
-    + (
-      startPlace === 'newNote'
-        ? ' on'
-        : ''
-    )
-    + '" type="button" data-start-place="newNote">'
-
-    + '<span>'
-    + '<strong>New note</strong>'
-    + '<small>Open a fresh note immediately when the app starts.</small>'
-    + '</span>'
-
-    + (
-      startPlace === 'newNote'
-        ? ic('check','tick')
-        : ''
-    )
-
-    + '</button>'
-
-    + '</div>'
-    + '</div>'
-
-+ '<div class="settings-group">'
-+ '<div class="settings-label">Storage</div>'
-
-+ '<div class="sheet-note">'
-+ (
-    NativeFS.available
-      ? 'Notes are stored in the selected Take Fast Notes folder.'
-      : 'The web version stores notes locally in this browser.'
-  )
-+ '</div>'
-
-+ (
-    NativeFS.available
-      ? (
-        '<button class="sheet-item" data-action="change-vault">'
-        + '<span class="nt-name">Change Notes Folder</span>'
-        + '</button>'
-      )
-      : ''
-  )
-
-+ '</div>'
-    
-    + '<button class="sheet-item" data-action="export">'
+    '<button class="sheet-item" data-action="export">'
     + ic('export')
-    + '<span class="nt-name">Export all notes</span>'
+    + '<span class="nt-name">Export Backup (JSON)</span>'
     + '</button>'
-
     + '<button class="sheet-item" data-action="import">'
     + ic('import')
-    + '<span class="nt-name">Import Markdown files</span>'
+    + '<span class="nt-name">Import Markdown / Backup</span>'
     + '</button>'
+    + (NativeFS.available
+        ? '<button class="sheet-item" data-action="change-vault"><span class="nt-name">Change Notes Storage Folder</span></button>'
+        : '')
   );
 }
 
+/* ---------- Theme Application ---------- */
 function applyTheme() {
-  const dark =
-    db.prefs.theme === 'dark'
-    || (
-      db.prefs.theme === 'system'
-      && matchMedia(
-        '(prefers-color-scheme: dark)'
-      ).matches
-    );
-
-  document.documentElement.dataset.theme =
-    dark
-      ? 'dark'
-      : 'light';
-
-  const meta =
-    $('meta[name="theme-color"]');
-
-  if (meta) {
-    meta.setAttribute(
-      'content',
-      dark
-        ? '#171614'
-        : '#F7F5F1'
-    );
-  }
+  document.documentElement.dataset.theme = 'dark';
+  const meta = $('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', '#121212');
 }
 
-const colorScheme =
-  matchMedia(
-    '(prefers-color-scheme: dark)'
-  );
-
-const onColorSchemeChange =
-  () => {
-    if (
-      db.prefs.theme === 'system'
-    ) {
-      applyTheme();
-    }
-  };
-
-if (colorScheme.addEventListener) {
-  colorScheme.addEventListener(
-    'change',
-    onColorSchemeChange
-  );
+/* ---------- Markdown Vault Sync ---------- */
+function markdownForNote(note) {
+  const title = String(note.title || 'Untitled').trim().replace(/[\r\n\/\\:*?"<>|]/g, ' ') || 'Untitled';
+  const body = htmlToMd(note.body || '');
+  return body.trim() ? '# ' + title + '\n\n' + body : '# ' + title + '\n';
 }
 
-else if (colorScheme.addListener) {
-  colorScheme.addListener(
-    onColorSchemeChange
-  );
-}
-
-/* ---------- Visual viewport / Android keyboard ---------- */
-function updateKeyboardInset() {
-  if (!window.visualViewport) {
-    document.documentElement.style.setProperty(
-      '--keyboard',
-      '0px'
-    );
-
-    return;
-  }
-
-  const vv =
-    visualViewport;
-
-  const keyboard =
-    Math.max(
-      0,
-      window.innerHeight
-      - vv.height
-      - vv.offsetTop
-    );
-
-  document.documentElement.style.setProperty(
-    '--keyboard',
-    keyboard + 'px'
-  );
-
-  if (
-    editing
-    && !editingReadonly
-    && document.activeElement === bodyInput
-  ) {
-    requestAnimationFrame(
-      () => {
-        const r =
-          bodyInput.getBoundingClientRect();
-
-        const safeBottom =
-          vv.height
-          + vv.offsetTop
-          - 12;
-
-        if (
-          r.bottom > safeBottom
-        ) {
-          editorScroll.scrollTop +=
-            r.bottom
-            - safeBottom;
-        }
-      }
-    );
-  }
-}
-
-if (window.visualViewport) {
-  visualViewport.addEventListener(
-    'resize',
-    updateKeyboardInset
-  );
-
-  visualViewport.addEventListener(
-    'scroll',
-    updateKeyboardInset
-  );
-}
-
-window.addEventListener(
-  'resize',
-  updateKeyboardInset
-);
-
-/* ---------- Markdown Vault ---------- */
-
-function vaultMarkdownToNote(
-  item,
-  markdown,
-  folderMap
-) {
-  const now =
-    Number(item.modified)
-    || Date.now();
-
-  const title =
-    item.name.replace(
-      /\.md$/i,
-      ''
-    );
-
-  const note = {
-    id: uid(),
-
-    title,
-
-    body:
-      mdToHtml(
-        markdown
-      ),
-
-    created: now,
-    updated: now,
-    viewed: now,
-
-    pinned: false,
-    fav: false,
-
-    nb:
-      folderMap.get(
-        parentFolderPath(
-          item.path
-        )
-      )
-      || null,
-
-    tags: [],
-
-    color: 'white',
-    zoom: 100,
-
-    filePath: item.path
-  };
-
-  return note;
-}
-
-function parentFolderPath(path) {
-  const clean =
-    String(path || '')
-      .replace(/^\/+|\/+$/g, '');
-
-  const parts =
-    clean.split('/');
-
-  if (parts.length <= 1) {
-    return '';
-  }
-
-  parts.pop();
-
-  return parts.join('/');
-}
-
-async function scanVaultFolder(
-  path,
-  parentId,
-  folderMap,
-  notes
-) {
-  const items =
-    await NativeFS.list(path);
-
-  for (const item of items) {
-    if (item.directory) {
-      const id = uid();
-
-      db.notebooks.push({
-        id,
-        name: item.name,
-        parent: parentId,
-        open: false
-      });
-
-      folderMap.set(
-        item.path,
-        id
-      );
-
-      await scanVaultFolder(
-        item.path,
-        id,
-        folderMap,
-        notes
-      );
-
-      continue;
-    }
-
-    if (
-      !item.name
-        .toLowerCase()
-        .endsWith('.md')
-    ) {
-      continue;
-    }
-
-    const markdown =
-      await NativeFS.readFile(
-        item.path
-      );
-
-    if (markdown === null) {
-      continue;
-    }
-
-    notes.push({
-      item,
-      markdown
-    });
-  }
-}
-
-async function syncVaultToDb() {
-  if (!NativeFS.available) {
-    return false;
-  }
-
-  db.notes = [];
-  db.notebooks = [];
-
-  const folderMap =
-    new Map();
-
-  const importedNotes = [];
-
-  await scanVaultFolder(
-    '',
-    null,
-    folderMap,
-    importedNotes
-  );
-
-  for (
-    const entry of importedNotes
-  ) {
-    db.notes.push(
-      vaultMarkdownToNote(
-        entry.item,
-        entry.markdown,
-        folderMap
-      )
-    );
-  }
-
-  save();
-
-  return true;
+async function writeNoteToVault(note) {
+  if (!NativeFS.available || !vaultReady || !note) return true;
+  const path = NativeFS.notePath(note);
+  return await NativeFS.writeFile(path, markdownForNote(note));
 }
 
 async function ensureVault() {
-  if (
-    !NativeFS.available
-  ) {
-    return true;
-  }
-
-  if (vaultReady) {
-    return true;
-  }
-
-  if (vaultInitializing) {
-    return false;
-  }
-
+  if (!NativeFS.available || vaultReady) return true;
+  if (vaultInitializing) return false;
   vaultInitializing = true;
-
   try {
-    const result =
-      await NativeFS.initialize();
-
-    if (!result.ready) {
-      return false;
-    }
-
-    await syncVaultToDb();
-
+    const result = await NativeFS.initialize();
+    if (!result.ready) return false;
     vaultReady = true;
-
     return true;
-
   } finally {
     vaultInitializing = false;
   }
 }
 
-function markdownForNote(note) {
-  const title =
-    cleanMarkdownTitle(
-      note.title
-    );
+/* ---------- Initialization ---------- */
+applyTheme();
+renderScreen();
 
-  const body =
-    htmlToMd(
-      note.body || ''
-    );
-
-  if (!body.trim()) {
-    return '# ' + title + '\n';
+async function startApp() {
+  if (NativeFS.available) {
+    await ensureVault();
   }
-
-  return (
-    '# '
-    + title
-    + '\n\n'
-    + body
-  );
-}
-
-function cleanMarkdownTitle(
-  value
-) {
-  return String(
-    value || 'Untitled'
-  )
-    .trim()
-    .replace(
-      /[\r\n]/g,
-      ' '
-    )
-    .replace(
-      /[\/\\:*?"<>|]/g,
-      '-'
-    )
-    || 'Untitled';
-}
-
-async function writeNoteToVault(
-  note
-) {
-  if (
-    !NativeFS.available
-    || !vaultReady
-    || !note
-  ) {
-    return true;
-  }
-
-  const path =
-    NativeFS.notePath(note);
-
-  const folder =
-    note.nb
-      ? NativeFS.folderPath(
-          note.nb
-        )
-      : '';
-
-  if (folder) {
-    const parts =
-      folder.split('/');
-
-    let current = '';
-
-    for (const part of parts) {
-      current =
-        current
-          ? current + '/' + part
-          : part;
-
-      if (
-        !(await NativeFS.createFolder(
-          current
-        ))
-      ) {
-        return false;
-      }
-    }
-  }
-
-  const success =
-    await NativeFS.writeFile(
-      path,
-      markdownForNote(note)
-    );
-
-  if (success) {
-    note.filePath = path;
-  }
-
-  return success;
-}
-
-/* ---------- Init ---------- */
-function openDefaultStartPlace() {
-  if (
-    db.prefs.startPlace === 'newNote'
-  ) {
-    createNote();
-    return;
-  }
-
   renderScreen();
 }
 
-applyTheme();
-updateKeyboardInset();
-
-async function startTakeFastNotes() {
-  if (NativeFS.available) {
-    const hasPermission =
-      await NativeFS.hasPermission();
-
-    if (!hasPermission) {
-      alert(
-        'Take Fast Notes needs access to a folder where it can store your notes.\n\n'
-        + 'Choose the location where you want the '
-        + '"Take Fast Notes" folder to be created.'
-      );
-    }
-
-    const ready =
-      await ensureVault();
-
-    if (!ready) {
-      renderScreen();
-
-      toast(
-        'Choose a notes folder to continue'
-      );
-
-      return;
-    }
-  }
-
-  openDefaultStartPlace();
-}
-
-startTakeFastNotes();
+startApp();

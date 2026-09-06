@@ -41,6 +41,8 @@
           <button id="selAll" class="icon-btn" type="button" aria-label="Select all" data-icon="check"></button>
           <button id="selPin" class="icon-btn" type="button" aria-label="Pin selected" data-icon="pin"></button>
           <button id="selFav" class="icon-btn" type="button" aria-label="Favorite selected" data-icon="star"></button>
+          <button id="selMove" class="icon-btn" type="button" aria-label="Move selected" data-icon="folder"></button>
+          <button id="selExport" class="icon-btn" type="button" aria-label="Export selected" data-icon="export"></button>
           <button id="selTrash" class="icon-btn" type="button" aria-label="Move selected to trash" data-icon="trash"></button>
         </div>
       </header>
@@ -122,6 +124,70 @@
       </div>
     </section>
 
+    <!-- FOLDER BROWSER PAGE -->
+    <section id="folderView" class="view" hidden>
+      <header class="topbar">
+        <button id="folderBackBtn" class="icon-btn" type="button" aria-label="Back" data-icon="back"></button>
+        <h1 class="screen-title">Folders</h1>
+      </header>
+      
+      <section id="folderList" class="content" style="padding-top: 12px;"></section>
+      
+      <!-- Sticky New Folder Button -->
+      <div style="padding: 16px 24px 32px;">
+        <button id="newFolderPageBtn" class="setting-choice" type="button" style="justify-content: center;">
+          <span class="ric" data-icon="plus" style="color: var(--accent);"></span>
+          <span style="color: var(--accent); font-weight: 650; font-size: 16px;">New Folder</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- SETTINGS PAGE -->
+    <section id="settingsView" class="view" hidden>
+      <header class="topbar">
+        <button id="settingsBackBtn" class="icon-btn" type="button" aria-label="Back" data-icon="back"></button>
+        <h1 class="screen-title">Settings</h1>
+      </header>
+      
+      <section class="content" style="padding-top: 12px; overflow-y: auto;">
+        
+        <div class="settings-group">
+          <div class="settings-label">Preferences</div>
+          <button id="setThemeBtn" class="setting-choice" type="button">
+            <span><strong>Theme</strong><small id="themeLabel">Dark</small></span>
+          </button>
+          <button id="setViewBtn" class="setting-choice" type="button">
+            <span><strong>Layout</strong><small id="viewLabel">List View</small></span>
+          </button>
+          <button id="setSortBtn" class="setting-choice" type="button">
+            <span><strong>Sort By</strong><small id="sortLabel">Recently Modified</small></span>
+          </button>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-label">Defaults</div>
+          <button id="setStartBtn" class="setting-choice" type="button">
+            <span><strong>Default Launch Screen</strong><small id="startPlaceLabel">Home</small></span>
+          </button>
+          <button id="setDefFolderBtn" class="setting-choice" type="button">
+            <span><strong>Default New-Note Folder</strong><small id="defFolderLabel">Home (Root)</small></span>
+          </button>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-label">Data & Storage</div>
+          <button id="setExportBtn" class="setting-choice" type="button">
+            <span><strong>Export Notes</strong><small>Save to device storage</small></span>
+            <span data-icon="export" class="mini"></span>
+          </button>
+          <button id="setImportBtn" class="setting-choice" type="button">
+            <span><strong>Import Notes</strong><small>Load Markdown files</small></span>
+            <span data-icon="import" class="mini"></span>
+          </button>
+        </div>
+      </section>
+    </section>
+    
     <!-- OVERLAYS & SHEETS -->
     <div id="scrim" class="scrim" aria-hidden="true"></div>
 

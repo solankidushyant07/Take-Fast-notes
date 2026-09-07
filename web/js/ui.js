@@ -10,10 +10,36 @@ const selBar = $('#selBar');
 const selCount = $('#selCount');
 const editView = $('#editView');
 const navTabNotes = $('#navTabNotes');
+
+const navTabLibrary = (() => {
+  const existing = $('#navTabLibrary');
+  if (existing) return existing;
+
+  const button = document.createElement('button');
+  button.id = 'navTabLibrary';
+  button.className = 'nav-tab';
+  button.type = 'button';
+  button.setAttribute('aria-label', 'Favorites and Tags');
+  button.dataset.nav = 'library';
+
+  button.innerHTML =
+    '<span class="nav-icon nav-library-icon">'
+    + ic('tag', 'library-tag')
+    + ic('star', 'library-star')
+    + '</span>';
+
+  const topbar = $('#homeTopbar');
+  topbar.insertBefore(button, $('#navTabTasks'));
+
+  return button;
+})();
+
 const navTabTasks = $('#navTabTasks');
 const navTabSettings = $('#navTabSettings');
+
 const searchInput = $('#searchInput');
 const searchClear = $('#searchClear');
+const searchContainer = searchInput.closest('.search-container');
 const filterRow = $('#filterRow');
 const content = $('#content');
 const fab = $('#fab');
@@ -82,7 +108,63 @@ function renderCategoryRow() {
   filterRow.innerHTML = html;
 }
 
+function renderLibraryContent() {
+  const favoriteCount = db.notes.filter(n => !n.trashed && n.fav).length;
+  const tagCount = allTags().length;
+
+  content.classList.remove('grid-view');
+
+  content.innerHTML =
+    '<div class="library-cards">'
+    + `<button class="library-card" type="button" data-library-card="favorites">`
+    + `<span class="library-card-icon">${ic('star')}</span>`
+    + `<span class="library-card-text"><strong>Favorites</strong><small>${favoriteCount} ${favoriteCount === 1 ? 'note' : 'notes'}</small></span>`
+    + '<span class="row-chevron">›</span>'
+    + '</button>'
+    + `<button class="library-card" type="button" data-library-card="tags">`
+    + `<span class="library-card-icon">${ic('tag')}</span>`
+    + `<span class="library-card-text"><strong>Tags</strong><small>${tagCount} ${tagCount === 1 ? 'tag' : 'tags'}</small></span>`
+    + '<span class="row-chevron">›</span>'
+    + '</button>'
+    + '</div>';
+}
+
+function renderTagCards() {
+  const tags = allTags();
+
+  content.classList.remove('grid-view');
+
+  if (!tags.length) {
+    content.innerHTML = empty(
+      'tag',
+      'No tags yet',
+      'Add tags from a note’s menu.'
+    );
+    return;
+  }
+
+  content.innerHTML =
+    '<div class="library-cards">'
+    + tags.map(([tag, count]) =>
+      `<button class="library-card" type="button" data-library-tag="${esc(tag)}">`
+      + `<span class="library-card-icon">${ic('tag')}</span>`
+      + `<span class="library-card-text"><strong>#${esc(tag)}</strong><small>${count} ${count === 1 ? 'note' : 'notes'}</small></span>`
+      + '<span class="row-chevron">›</span>'
+      + '</button>'
+    ).join('')
+    + '</div>';
+}
+
 function renderContent() {
+  if (currentTab === 'library') {
+    if (screen.subview === 'tags') {
+      renderTagCards();
+    } else {
+      renderLibraryContent();
+    }
+    return;
+  }
+
   const q = searchInput.value.trim().toLowerCase();
   let notes = db.notes.filter(n => !n.trashed);
 
@@ -94,11 +176,19 @@ function renderContent() {
   } else if (screen.type === 'tag') {
     notes = notes.filter(n => (n.tags || []).includes(screen.tag));
   } else if (screen.type === 'notes') {
-    if (screen.filter === 'recent') notes = notes.filter(n => Date.now() - n.updated < 7 * 864e5);
-    if (screen.filter === 'favorites') notes = notes.filter(n => n.fav);
+    if (screen.filter === 'favorites') {
+      notes = notes.filter(n => n.fav);
+    }
   }
 
-  if (q) notes = notes.filter(n => ((n.title || '') + ' ' + plain(n.body) + ' ' + (n.tags || []).join(' ')).toLowerCase().includes(q));
+  if (q) {
+    notes = notes.filter(n =>
+      ((n.title || '') + ' ' + plain(n.body) + ' ' + (n.tags || []).join(' '))
+        .toLowerCase()
+        .includes(q)
+    );
+  }
+
   notes = sortNotesList(notes);
   visibleIds = notes.map(n => n.id);
 
@@ -107,8 +197,22 @@ function renderContent() {
     content.innerHTML = notes.map(noteCard).join('');
     return;
   }
+
   content.classList.remove('grid-view');
-  content.innerHTML = empty(q ? 'search' : currentTab === 'tasks' ? 'tasksTab' : 'notesTab', q ? 'No matching notes' : currentTab === 'tasks' ? 'No tasks yet' : 'No notes yet', q ? 'Try a different search term.' : currentTab === 'tasks' ? 'Create a note with a checklist.' : 'Tap + to create your first note.');
+
+  content.innerHTML = empty(
+    q ? 'search' : currentTab === 'tasks' ? 'tasksTab' : 'notesTab',
+    q
+      ? 'No matching notes'
+      : currentTab === 'tasks'
+        ? 'No tasks yet'
+        : 'No notes yet',
+    q
+      ? 'Try a different search term.'
+      : currentTab === 'tasks'
+        ? 'Create a note with a checklist.'
+        : 'Tap + to create your first note.'
+  );
 }
 
 function renderTrash() {
@@ -129,32 +233,88 @@ function renderTrash() {
 
 function renderScreen() {
   navTabNotes.classList.toggle('active', currentTab === 'notes');
+  navTabLibrary.classList.toggle('active', currentTab === 'library');
   navTabTasks.classList.toggle('active', currentTab === 'tasks');
   navTabSettings.classList.toggle('active', settingsView.hidden === false);
+
+  const libraryView = currentTab === 'library';
+  const tagsView = libraryView && screen.subview === 'tags';
+
   selBar.hidden = !selMode;
   homeTopbar.hidden = selMode;
-  filterRow.hidden = selMode || currentTab === 'tasks' || screen.type === 'trash';
-  fab.hidden = selMode || screen.type === 'trash';
+
+  searchContainer.hidden =
+    selMode ||
+    libraryView ||
+    tagsView ||
+    currentTab === 'tasks' ||
+    screen.type === 'trash';
+
+  filterRow.hidden =
+    selMode ||
+    libraryView ||
+    currentTab === 'tasks' ||
+    screen.type === 'trash';
+
+  fab.hidden =
+    selMode ||
+    libraryView ||
+    screen.type === 'trash';
+
   selCount.textContent = countLabel(selSet.size, 'selected');
-  if (screen.type === 'trash') { renderTrash(); return; }
-  renderCategoryRow();
+
+  if (screen.type === 'trash') {
+    renderTrash();
+    return;
+  }
+
   renderContent();
+
+  if (!libraryView) {
+    renderCategoryRow();
+  }
 }
 
 function countLabel(n, singular, plural = singular + 's') { return `${n} ${n === 1 ? singular : plural}`; }
 
 function renderFolderPage() {
   const folders = db.notebooks.filter(n => !n.trashed);
-  let html = `<button class="folder-list-item" data-nb-nav="all"><span class="ric">${ic('doc')}</span><span class="f-name">All Notes</span></button>`;
+  const allCount = db.notes.filter(n => !n.trashed).length;
+
+  let html =
+    `<button class="folder-list-item" type="button" data-nb-nav="all">`
+    + `<span class="ric">${ic('doc')}</span>`
+    + `<span class="f-name"><strong>All Notes</strong><small>${allCount} ${allCount === 1 ? 'note' : 'notes'}</small></span>`
+    + '<span class="row-chevron">›</span>'
+    + '</button>';
+
   function add(parent, depth) {
-    folders.filter(n => (n.parent || null) === (parent || null)).forEach(nb => {
-      const selected = selMode && selSet.has(nb.id);
-      html += `<button class="folder-list-item ${selected ? 'selected' : ''}" data-nb-nav="${esc(nb.id)}" style="padding-left:${20 + depth * 20}px"><span class="ric">${ic('folder')}</span><span class="f-name">${esc(nb.name)}</span><span class="f-count">${folderNoteCount(nb.id)}</span><span class="folder-more" data-folder-action="${esc(nb.id)}" aria-label="Folder actions">${ic('kebab')}</span></button>`;
-      add(nb.id, depth + 1);
-    });
+    folders
+      .filter(n => (n.parent || null) === (parent || null))
+      .forEach(nb => {
+        const selected = selMode && selSet.has(nb.id);
+        const count = folderNoteCount(nb.id);
+
+        html +=
+          `<button class="folder-list-item ${selected ? 'selected' : ''}" type="button" data-nb-nav="${esc(nb.id)}" style="--folder-depth:${depth}">`
+          + `<span class="ric">${ic('folder')}</span>`
+          + `<span class="f-name"><strong>${esc(nb.name)}</strong><small>${count} ${count === 1 ? 'note' : 'notes'}</small></span>`
+          + `<span class="folder-more" data-folder-action="${esc(nb.id)}" aria-label="Folder actions">${ic('kebab')}</span>`
+          + '<span class="row-chevron">›</span>'
+          + '</button>';
+
+        add(nb.id, depth + 1);
+      });
   }
+
   add(null, 0);
-  folderList.innerHTML = html;
+
+  folderList.classList.add('folder-list');
+  folderList.innerHTML =
+    '<div class="page-section-label">Folders</div>' + html;
+
+  $('#folderView .screen-title').textContent = 'FOLDERS & LIBRARY';
+
   $('#newFolderPageBtn').parentElement.hidden = selMode;
 }
 

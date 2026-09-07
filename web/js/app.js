@@ -49,7 +49,10 @@ function refreshSettingsLabels() {
   const def = byNb(db.prefs.defFolder);
   $('#defFolderLabel').textContent = def ? folderPath(def.id).join(' / ') : 'Home (Root)';
   $('#startPlaceLabel').textContent = db.prefs.startPlace === 'newNote' ? 'New Note' : 'Home';
-}
+}  $('#setExportBtn small').textContent =
+    'Export as Markdown, Text, ZIP or JSON';
+  $('#setImportBtn small').textContent =
+    'Import Markdown, Text, ZIP or JSON';
 
 function setTheme() {
   const theme = db.prefs.theme === 'dark' ? 'light' : 'dark';
@@ -70,6 +73,11 @@ function applyTheme() {
 navTabNotes.addEventListener('click', () => {
   currentTab = 'notes';
   nav({ type: 'notes', filter: 'all' });
+});
+
+navTabLibrary.addEventListener('click', () => {
+  currentTab = 'library';
+  nav({ type: 'library' });
 });
 
 navTabTasks.addEventListener('click', () => {
@@ -151,8 +159,36 @@ content.addEventListener('click', e => {
     return;
   }
 
+  const libraryCard = e.target.closest('[data-library-card]');
+
+  if (libraryCard) {
+    const type = libraryCard.dataset.libraryCard;
+
+    if (type === 'favorites') {
+      currentTab = 'notes';
+      nav({ type: 'notes', filter: 'favorites' });
+    } else if (type === 'tags') {
+      currentTab = 'library';
+      nav({ type: 'library', subview: 'tags' });
+    }
+
+    return;
+  }
+
+  const libraryTag = e.target.closest('[data-library-tag]');
+
+  if (libraryTag) {
+    currentTab = 'notes';
+    nav({
+      type: 'tag',
+      tag: libraryTag.dataset.libraryTag
+    });
+    return;
+  }
+
   const card = e.target.closest('.note-card');
   if (!card) return;
+  
   const id = card.dataset.open;
   if (!id) return;
 
@@ -331,8 +367,12 @@ function moveFolderToTrash(id) {
 
 /* ---------- Folder/library sheet ---------- */
 filterRow.addEventListener('click', e => {
+  
   const folderNav = e.target.closest('[data-action="open-folder-browser"]');
-  if (folderNav) { openFolderBrowserSheet(); return; }
+if (folderNav) {
+  nav({ type: 'notebooks' });
+  return;
+}
   const allPill = e.target.closest('[data-cat="all"]');
   if (allPill) { nav({ type: 'notes', filter: 'all' }); return; }
   const folderPill = e.target.closest('[data-folder-pill]');
@@ -348,7 +388,6 @@ function openFolderBrowserSheet() {
     html += `<button class="sheet-item" data-sheet-nb="${esc(nb.id)}"><span style="width:${depth * 16}px"></span>${ic('folder')}<span class="nt-name">${esc(nb.name)}</span><span class="sheet-count">${folderNoteCount(nb.id)}</span></button>`;
   });
   html += '<div class="sheet-divider"></div><div class="sheet-section-title">Library</div>';
-  html += '<button class="sheet-item" data-sheet-lib="recent">' + ic('clock') + '<span class="nt-name">Recent</span></button>';
   html += '<button class="sheet-item" data-sheet-lib="favorites">' + ic('star') + '<span class="nt-name">Favorites</span></button>';
   html += '<button class="sheet-item" data-sheet-lib="tags">' + ic('tag') + '<span class="nt-name">Tags</span></button>';
   const trashCount = db.notes.filter(n => n.trashed && !n.trashedBy).length + db.notebooks.filter(n => n.trashed && !n.trashedBy).length;
@@ -381,8 +420,10 @@ sheetContent.addEventListener('click', e => {
   if (lib) {
     closeSheet();
     const k = lib.dataset.sheetLib;
-    if (k === 'recent') nav({ type: 'notes', filter: 'recent' });
-    else if (k === 'favorites') nav({ type: 'notes', filter: 'favorites' });
+    if (k === 'favorites') {
+    currentTab = 'notes';
+  nav({ type: 'notes', filter: 'favorites' });
+    }
     else if (k === 'tags') openTagSheet();
     else if (k === 'trash') nav({ type: 'trash' });
     return;
@@ -781,8 +822,6 @@ function deleteForever(target) {
   }
   save(); trashActionTarget = null; renderScreen(); toast('Deleted permanently');
 }
-
-let trashActionTarget = null;
 
 /* ---------- Export: app-only file boundary ---------- */
 function exportNotes(notes, kind) {

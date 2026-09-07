@@ -26,6 +26,7 @@ function uid() {
 
 /* ---------- Icons ---------- */
 const I = {
+  
   // Xiaomi-style Notes top tab
   notesTab:
     '<path d="M5 4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4z"/>'
@@ -35,6 +36,11 @@ const I = {
   tasksTab:
     '<rect x="4" y="4" width="16" height="16" rx="3.5"/>'
     + '<path d="M8.5 12l2.5 2.5 4.5-5"/>',
+
+  // Favorites + Tags top tab
+  libraryTab:
+    '<path d="M20.5 13.5L13.5 20.5a2 2 0 0 1-2.8 0L4 13.8V5h8.8l7.7 7.7a.9.9 0 0 1 0 .8z"/>'
+    + '<path d="M9 8.2l.8 1.5 1.7.2-1.2 1.2.3 1.7-1.6-.8-1.6.8.3-1.7-1.2-1.2 1.7-.2z"/>',
 
   // Xiaomi-style Settings top tab (hexagon / gear)
   settingsTab:

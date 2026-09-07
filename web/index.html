@@ -14,29 +14,30 @@
   <link rel="icon" href="assets/icons/icon-192.png" type="image/png">
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <main class="app">
 
-    <!-- HOME: Note browser, search, folders and cards -->
     <section id="homeView" class="view">
-      
-      <!-- Top Navigation: 3 Xiaomi-style Icons -->
+
       <header id="homeTopbar" class="topbar-nav">
         <button id="navTabNotes" class="nav-tab active" type="button" aria-label="Notes" data-nav="notes">
           <span class="nav-icon" data-icon="notesTab"></span>
         </button>
+
         <button id="navTabTasks" class="nav-tab" type="button" aria-label="Tasks" data-nav="tasks">
           <span class="nav-icon" data-icon="tasksTab"></span>
         </button>
+
         <button id="navTabSettings" class="nav-tab" type="button" aria-label="Settings" data-nav="settings">
           <span class="nav-icon" data-icon="settingsTab"></span>
         </button>
       </header>
 
-      <!-- Selection Mode Header -->
       <header id="selBar" class="topbar sel-topbar" hidden>
         <button id="selClose" class="icon-btn" type="button" aria-label="Cancel selection" data-icon="x"></button>
         <span id="selCount" class="sel-count-label">0 selected</span>
+
         <div class="sel-actions">
           <button id="selAll" class="icon-btn" type="button" aria-label="Select all" data-icon="check"></button>
           <button id="selPin" class="icon-btn" type="button" aria-label="Pin selected" data-icon="pin"></button>
@@ -47,10 +48,10 @@
         </div>
       </header>
 
-      <!-- Search Capsule Bar -->
       <div class="search-container">
         <div class="searchbar">
           <span class="s-ic" data-icon="search"></span>
+
           <input
             id="searchInput"
             type="search"
@@ -60,6 +61,7 @@
             spellcheck="false"
             aria-label="Search notes"
           >
+
           <button
             id="searchClear"
             class="s-clear"
@@ -71,27 +73,27 @@
         </div>
       </div>
 
-      <!-- Categories & Folder Navigation Row -->
       <nav id="filterRow" class="category-row" aria-label="Note categories"></nav>
 
-      <!-- Note Cards Content Area -->
       <section id="content" class="content-cards" aria-live="polite"></section>
 
-      <!-- Primary Creation Action: Floating + button -->
       <button id="fab" class="fab" type="button" aria-label="New note" data-icon="plus"></button>
     </section>
 
-    <!-- EDITOR: Title, writing area and toolbar -->
     <section id="editView" class="view" hidden>
       <header class="topbar edit-topbar">
         <button id="backBtn" class="icon-btn" type="button" aria-label="Back to notes" data-icon="back"></button>
+
         <div id="editTitleBar" class="topbar-title">Untitled</div>
+
         <span id="saveState" class="save-state">Saved</span>
+
         <button id="editMenuBtn" class="icon-btn" type="button" aria-label="Note options" data-icon="kebab"></button>
       </header>
 
       <div id="noteZone">
         <div id="editorScroll" class="editor-scroll bg-white">
+
           <input
             id="titleInput"
             type="text"
@@ -100,6 +102,7 @@
             spellcheck="true"
             aria-label="Note title"
           >
+
           <div
             id="bodyInput"
             contenteditable="true"
@@ -108,6 +111,7 @@
             aria-multiline="true"
             spellcheck="true"
           ></div>
+
         </div>
 
         <div id="fmtbar" class="fmtbar" aria-label="Formatting toolbar">
@@ -124,41 +128,41 @@
       </div>
     </section>
 
-    <!-- FOLDER BROWSER PAGE -->
     <section id="folderView" class="view" hidden>
       <header class="topbar">
         <button id="folderBackBtn" class="icon-btn" type="button" aria-label="Back" data-icon="back"></button>
         <h1 class="screen-title">Folders</h1>
       </header>
-      
-      <section id="folderList" class="content" style="padding-top: 12px;"></section>
-      
-      <!-- Sticky New Folder Button -->
-      <div style="padding: 16px 24px 32px;">
-        <button id="newFolderPageBtn" class="setting-choice" type="button" style="justify-content: center;">
-          <span class="ric" data-icon="plus" style="color: var(--accent);"></span>
-          <span style="color: var(--accent); font-weight: 650; font-size: 16px;">New Folder</span>
+
+      <section id="folderList" class="content" style="padding-top:12px;"></section>
+
+      <div style="padding:16px 24px 32px;">
+        <button id="newFolderPageBtn" class="setting-choice" type="button" style="justify-content:center;">
+          <span class="ric" data-icon="plus" style="color:var(--accent);"></span>
+          <span style="color:var(--accent);font-weight:650;font-size:16px;">New Folder</span>
         </button>
       </div>
     </section>
 
-    <!-- SETTINGS PAGE -->
     <section id="settingsView" class="view" hidden>
       <header class="topbar">
         <button id="settingsBackBtn" class="icon-btn" type="button" aria-label="Back" data-icon="back"></button>
         <h1 class="screen-title">Settings</h1>
       </header>
-      
-      <section class="content" style="padding-top: 12px; overflow-y: auto;">
-        
+
+      <section class="content" style="padding-top:12px;overflow-y:auto;">
+
         <div class="settings-group">
           <div class="settings-label">Preferences</div>
+
           <button id="setThemeBtn" class="setting-choice" type="button">
             <span><strong>Theme</strong><small id="themeLabel">Dark</small></span>
           </button>
+
           <button id="setViewBtn" class="setting-choice" type="button">
             <span><strong>Layout</strong><small id="viewLabel">List View</small></span>
           </button>
+
           <button id="setSortBtn" class="setting-choice" type="button">
             <span><strong>Sort By</strong><small id="sortLabel">Recently Modified</small></span>
           </button>
@@ -166,9 +170,11 @@
 
         <div class="settings-group">
           <div class="settings-label">Defaults</div>
+
           <button id="setStartBtn" class="setting-choice" type="button">
             <span><strong>Default Launch Screen</strong><small id="startPlaceLabel">Home</small></span>
           </button>
+
           <button id="setDefFolderBtn" class="setting-choice" type="button">
             <span><strong>Default New-Note Folder</strong><small id="defFolderLabel">Home (Root)</small></span>
           </button>
@@ -176,19 +182,27 @@
 
         <div class="settings-group">
           <div class="settings-label">Data & Storage</div>
+
           <button id="setExportBtn" class="setting-choice" type="button">
-            <span><strong>Export Notes</strong><small>Export as Markdown, Text ZIP or JSON</small></span>
+            <span>
+              <strong>Export Notes</strong>
+              <small>Export as Markdown, Text ZIP or JSON</small>
+            </span>
             <span data-icon="export" class="mini"></span>
           </button>
+
           <button id="setImportBtn" class="setting-choice" type="button">
-            <span><strong>Import Notes</strong><small>Import Markdown, Text, ZIP or JSON</small></span>
+            <span>
+              <strong>Import Notes</strong>
+              <small>Import Markdown, Text, ZIP or JSON</small>
+            </span>
             <span data-icon="import" class="mini"></span>
           </button>
         </div>
+
       </section>
     </section>
-    
-    <!-- OVERLAYS & SHEETS -->
+
     <div id="scrim" class="scrim" aria-hidden="true"></div>
 
     <div id="menu" class="menu" hidden role="menu"></div>
@@ -208,12 +222,27 @@
     >
 
     <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+
   </main>
 
   <script src="js/core.js"></script>
+
+  <!-- Feature foundation must load before app logic. -->
+  <script src="js/feature-core.js"></script>
+  <script src="js/feature-media.js"></script>
+
+  <!-- Existing application. -->
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
 
+  <!-- Feature extensions. -->
+  <script src="js/feature-storage.js"></script>
+  <script src="js/feature-privacy.js"></script>
+  <script src="js/feature-history.js"></script>
+  <script src="js/feature-notes.js"></script>
+  <script src="js/feature-search.js"></script>
+  <script src="js/feature-editor.js"></script>
+  <script src="js/feature-android.js"></script>
 
 </body>
 </html>

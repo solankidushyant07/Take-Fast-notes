@@ -949,3 +949,390 @@ html[data-theme="light"] .bg-green { background-color: #EEF8EF; }
   .content-cards.grid-view { grid-template-columns: 1fr 1fr; gap: 9px; padding-left: 12px; padding-right: 12px; }
   .content-cards.grid-view .note-card { border-radius: 15px; }
 }
+
+/* ---------- Compact Settings / Folder / Library UI ---------- */
+
+.topbar {
+  flex: 0 0 auto;
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+  background: var(--bg);
+}
+
+.screen-title {
+  margin: 0 0 0 8px;
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.page-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 18px calc(32px + env(safe-area-inset-bottom));
+}
+
+.page-section-label,
+.settings-label {
+  margin: 12px 4px 8px;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+
+/* ---------- Settings ---------- */
+
+.settings-page-content {
+  display: block;
+}
+
+.settings-group {
+  margin-bottom: 24px;
+}
+
+.setting-choice {
+  width: 100%;
+  min-height: 62px;
+  padding: 10px 16px;
+  margin: 6px 0;
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  background: var(--surface-card);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+}
+
+.setting-choice:active {
+  background: var(--surface-card-active);
+}
+
+.setting-choice > span:first-child {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setting-choice strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.setting-choice small {
+  display: block;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setting-choice::after {
+  content: "›";
+  flex: 0 0 auto;
+  margin-left: 4px;
+  color: var(--text-3);
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 300;
+}
+
+.setting-choice .mini {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  color: var(--accent);
+}
+
+.setting-choice .mini svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* ---------- Folder Page ---------- */
+
+.folder-page-content {
+  padding-top: 2px;
+}
+
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.folder-list .page-section-label {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.folder-list-item {
+  width: 100%;
+  min-height: 66px;
+  padding: 11px 14px;
+  margin: 0;
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  background: var(--surface-card);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+}
+
+.folder-list-item[style] {
+  padding-left: 14px;
+}
+
+.folder-list-item:active {
+  background: var(--surface-card-active);
+}
+
+.folder-list-item .ric {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+}
+
+.folder-list-item .ric svg {
+  width: 22px;
+  height: 22px;
+}
+
+.folder-list-item .f-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: calc(var(--folder-depth, 0) * 14px);
+}
+
+.folder-list-item .f-name strong {
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 650;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-list-item .f-name small {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text-3);
+}
+
+.folder-list-item .f-count {
+  display: none;
+}
+
+.folder-more {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+}
+
+.folder-more svg {
+  width: 18px;
+  height: 18px;
+}
+
+.folder-action-card {
+  width: 100%;
+  min-height: 62px;
+  margin-top: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  background: var(--surface-card);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+}
+
+.folder-action-card:active {
+  background: var(--surface-card-active);
+}
+
+.folder-action-card .action-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+}
+
+.folder-action-card .action-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.folder-action-card .action-text {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--accent);
+}
+
+/* ---------- Favorites / Tags ---------- */
+
+.library-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 0 24px;
+}
+
+.library-card {
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-card);
+  border-radius: 16px;
+  background: var(--surface-card);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+}
+
+.library-card:active {
+  background: var(--surface-card-active);
+}
+
+.library-card-icon {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.library-card-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.library-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.library-card-text strong {
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.library-card-text small {
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--text-3);
+}
+
+/* ---------- Combined Favorites + Tags navigation icon ---------- */
+
+.nav-library-icon {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.nav-library-icon .library-tag {
+  position: absolute;
+  inset: 1px;
+  width: 21px;
+  height: 21px;
+}
+
+.nav-library-icon .library-star {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  right: 0;
+  bottom: 0;
+  background: var(--bg);
+  border-radius: 50%;
+  padding: 1px;
+}
+
+.nav-tab.active .nav-library-icon .library-star {
+  background: var(--accent);
+}
+
+/* ---------- Compact icons everywhere sheets/menus use them ---------- */
+
+.sheet-item svg,
+.menu-item svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+}
+
+.sheet-item .nt-name {
+  min-width: 0;
+  flex: 1;
+}
+
+.sheet-item .sheet-count {
+  flex: 0 0 auto;
+}
+
+.row-chevron {
+  flex: 0 0 auto;
+  color: var(--text-3);
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 300;
+}
+
+@media (max-width: 420px) {
+  .topbar-nav {
+    gap: 22px;
+  }
+
+  .page-content {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .setting-choice,
+  .folder-list-item,
+  .folder-action-card,
+  .library-card {
+    border-radius: 15px;
+  }
+}

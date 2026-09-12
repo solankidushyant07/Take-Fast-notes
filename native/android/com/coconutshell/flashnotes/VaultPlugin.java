@@ -1,12 +1,10 @@
-package com.coconutshell.takefastnotes;
+package com.coconutshell.flashnotes;
 
 import android.app.Activity;
 import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
-import android.provider.DocumentsContract;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -15,7 +13,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 @CapacitorPlugin(
-        name = "TakeFastNotesVault"
+        name = "FlashNotesVault"
 )
 public class VaultPlugin extends Plugin {
 
@@ -59,7 +57,7 @@ public class VaultPlugin extends Plugin {
 
         Intent intent =
                 manager.createConfirmDeviceCredentialIntent(
-                        "Take Fast Notes",
+                        "Flash Notes",
                         "Authenticate to continue"
                 );
 

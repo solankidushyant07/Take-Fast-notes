@@ -1,4 +1,4 @@
-package com.coconutshell.takefastnotes;
+package com.coconutshell.flashnotes;
 
 import android.content.Intent;
 import android.content.SharedPreferences;

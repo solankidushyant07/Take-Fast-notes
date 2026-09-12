@@ -1,4 +1,4 @@
-name: Build Take Fast Notes APK
+name: Build Flash Notes APK
 
 on:
   workflow_dispatch:
@@ -31,11 +31,13 @@ jobs:
 
       - name: Create Android project
         run: npx cap add android
+
       - name: Add native Android code
         run: |
-          mkdir -p android/app/src/main/java/com/coconutshell/takefastnotes
-          cp native/android/com/coconutshell/takefastnotes/MainActivity.java android/app/src/main/java/com/coconutshell/takefastnotes/MainActivity.java
-          cp native/android/com/coconutshell/takefastnotes/VaultPlugin.java android/app/src/main/java/com/coconutshell/takefastnotes/VaultPlugin.java
+          mkdir -p android/app/src/main/java/com/coconutshell/flashnotes
+          cp native/android/com/coconutshell/flashnotes/MainActivity.java android/app/src/main/java/com/coconutshell/flashnotes/MainActivity.java
+          cp native/android/com/coconutshell/flashnotes/VaultPlugin.java android/app/src/main/java/com/coconutshell/flashnotes/VaultPlugin.java
+
       - name: Generate Android icons
         run: npx @capacitor/assets generate --android --iconBackgroundColor '#121212'
 
@@ -47,11 +49,11 @@ jobs:
         working-directory: android
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk Take-Fast-Notes.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Flash-Notes.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Take-Fast-Notes
-          path: Take-Fast-Notes.apk
+          name: Flash-Notes
+          path: Flash-Notes.apk
           if-no-files-found: error
